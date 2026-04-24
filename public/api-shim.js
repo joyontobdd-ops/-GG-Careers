@@ -279,6 +279,10 @@
         return jsonResp({ error: 'API not found', pathname }, 404);
     }
 
+    // Debug counters
+    let callCount = 0;
+    let errCount  = 0;
+
     // Override fetch
     window.fetch = async function (input, init) {
         const urlStr = typeof input === 'string' ? input : (input && input.url) || '';
@@ -289,24 +293,46 @@
         if (!isLocalApi) return _fetch(input, init);
 
         const u = new URL(urlStr, window.location.origin);
-        const method = (init && init.method) || 'GET';
+        const method = ((init && init.method) || 'GET').toUpperCase();
         let body = {};
         if (init && init.body) {
             try { body = JSON.parse(init.body); } catch { body = {}; }
         }
 
+        callCount += 1;
+        const t0 = performance.now();
+        const tag = `#${callCount} ${method} ${u.pathname}${u.search}`;
         try {
-            return await handleApi(u.pathname, method.toUpperCase(), body, u.searchParams);
+            const resp = await handleApi(u.pathname, method, body, u.searchParams);
+            const ms = (performance.now() - t0).toFixed(0);
+            const bg = resp.status >= 400 ? '#fc0' : '#3c3';
+            console.log(
+                `%c[api-shim] ${tag} → ${resp.status} (${ms}ms)`,
+                `background:${bg};color:#000;padding:1px 4px;border-radius:2px`,
+            );
+            return resp;
         } catch (e) {
-            console.error('[api-shim]', e);
+            errCount += 1;
+            console.error(`[api-shim] ${tag} FAILED`, e);
             return jsonResp({ error: 'shim error', message: String(e.message || e) }, 500);
         }
     };
 
+    // Expose for debug
+    window.__apiShim = {
+        supabaseUrl: SUPABASE_URL,
+        table: TABLE,
+        stats: () => ({ calls: callCount, errors: errCount }),
+        ping: async () => {
+            const r = await _fetch(`${REST}?select=id&limit=1`, { headers: sbHeaders });
+            return { status: r.status, ok: r.ok };
+        },
+    };
+
     console.log(
-        '%c[api-shim] Supabase mode',
-        'background:#0cf;color:#000;padding:2px 6px;border-radius:3px',
-        'tất cả fetch tới localhost:5000/api/* sẽ được route qua',
-        SUPABASE_URL,
+        '%c[api-shim] Supabase mode ACTIVE',
+        'background:#0cf;color:#000;padding:4px 10px;border-radius:4px;font-weight:bold',
+        `\n  → all fetch to localhost:5000/api/* will be routed to ${SUPABASE_URL}`,
+        '\n  → type  __apiShim.stats()  or  __apiShim.ping()  in console to debug',
     );
 })();
