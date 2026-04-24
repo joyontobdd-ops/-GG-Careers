@@ -119,7 +119,7 @@ const formSchema = z.object({
   // bá» trá»‘ng â†’ pass luÃ´n Ä‘á»ƒ khÃ´ng cháº·n redirect Submit & continue.
   linkedInProfile: z.string().optional().refine(
     (v) => !v || /linkedin\.com/i.test(v),
-    'Enter a valid linkedin.com URL (hoáº·c bá» trá»‘ng)'
+    'Enter a valid LinkedIn URL (or leave blank)'
   ),
   countryCode: z.string().min(1, 'Select a country'),
   phoneNumber: z.string().min(6, 'Enter a valid phone number'),
