@@ -612,7 +612,20 @@
         }
         .tag-select:hover { border-color: var(--accent); color: var(--accent); }
         .tag-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 20%, transparent); }
-        .tag-select option { text-transform: none; letter-spacing: 0; }
+        .tag-select option {
+            text-transform: none;
+            letter-spacing: 0;
+            color: #202124;
+            background-color: #ffffff;
+            font-weight: 500;
+            padding: 4px 8px;
+        }
+        @media (prefers-color-scheme: dark) {
+            .tag-select option {
+                color: #e8eaed;
+                background-color: #202124;
+            }
+        }
         .tag-select.tag-hot     { color: #ea4335; border-color: color-mix(in oklch, #ea4335 40%, transparent); background-color: color-mix(in oklch, #ea4335 10%, transparent); }
         .tag-select.tag-warm    { color: #f9ab00; border-color: color-mix(in oklch, #f9ab00 40%, transparent); background-color: color-mix(in oklch, #f9ab00 10%, transparent); }
         .tag-select.tag-good    { color: #34a853; border-color: color-mix(in oklch, #34a853 40%, transparent); background-color: color-mix(in oklch, #34a853 10%, transparent); }
@@ -2505,7 +2518,8 @@
                     : `<span class="country-wrap empty">—</span>`;
 
                 const tagVal = r.tag || '';
-                const tagClass = tagVal ? ` tag-${tagVal}` : '';
+                const tagSlug = String(tagVal).toLowerCase().replace(/[^a-z0-9_-]/g, '');
+                const tagClass = tagSlug ? ` tag-${tagSlug}` : '';
                 // NOTE: The "No tag" option deliberately uses value="__none__" instead of an
                 // empty string because some Chromium builds on Windows swallow the `change`
                 // event when the user selects an empty-value option — the dropdown simply
@@ -2862,7 +2876,8 @@
             if (entry) entry.tag = tag;
             const sel = document.querySelector(`#row-${id} .tag-select`);
             if (sel) {
-                sel.className = 'tag-select' + (tag ? ' tag-' + tag : '');
+                const slug = String(tag || '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+                sel.className = 'tag-select' + (slug ? ' tag-' + slug : '');
             }
             try {
                 await fetch(`${API}/api/set-meta`, {
@@ -4931,16 +4946,23 @@
                     // onchange handler converts __none__ back to "" before calling
                     // setRowTag, so the stored model stays "" for no-tag rows.
                     const all = TagStore.read();
-                    const parts = [`<option value="__none__" ${selectedVal === '' ? 'selected' : ''}>No tag</option>`];
+                    const sel = String(selectedVal || '').toLowerCase();
+                    const parts = [`<option value="__none__" ${sel === '' ? 'selected' : ''}>No tag</option>`];
                     for (const t of all) {
-                        const sel = selectedVal === t.v ? 'selected' : '';
-                        parts.push(`<option value="${esc(t.v)}" ${sel}>${esc(t.emoji || '')} ${esc(t.l)}</option>`);
+                        const isSel = sel === String(t.v).toLowerCase();
+                        parts.push(`<option value="${esc(t.v)}" ${isSel ? 'selected' : ''}>${esc(t.emoji || '')} ${esc(t.l)}</option>`);
                     }
                     // Unknown tag (row still has an old value after tag deletion)
-                    if (selectedVal && !all.some(t => t.v === selectedVal)) {
-                        parts.push(`<option value="${esc(selectedVal)}" selected>${esc(selectedVal)} (removed)</option>`);
+                    if (sel && !all.some(t => String(t.v).toLowerCase() === sel)) {
+                        parts.push(`<option value="${esc(selectedVal)}" selected>${esc(selectedVal)} (custom)</option>`);
                     }
                     return parts.join('');
+                },
+                normalize(v) {
+                    const s = String(v || '').toLowerCase();
+                    const all = TagStore.read();
+                    const match = all.find(t => String(t.v).toLowerCase() === s);
+                    return match ? match.v : s;
                 },
                 applyCssToDom() {
                     const id = 'tag-dynamic-style';
