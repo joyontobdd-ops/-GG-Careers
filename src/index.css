@@ -1,0 +1,250 @@
+@import url("https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Display:wght@400;700&family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap");
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+==========================================================================
+【AI HANDOVER NOTE】
+1. DESIGN PHILOSOPHY:
+   - Google Material Design 3.0 inspired with clean, approachable professionalism
+   - Emphasis on whitespace and breathing room to convey enterprise-level sophistication
+   - Playful Google brand colors used as strategic accents, not overwhelming
+   - Trust-building through clarity: information hierarchy guides users from discovery to action
+   - Why this approach: Google's brand is synonymous with innovation and accessibility; the design must reflect both corporate professionalism (Director-level role) and Google's friendly, human-centric culture
+
+2. TYPOGRAPHY:
+   - Inter as primary sans: Modern, highly legible, professional yet approachable—perfect for corporate recruitment
+   - Roboto as fallback: Google's signature typeface, ensures brand consistency
+   - JetBrains Mono for technical details: Used sparingly for email addresses, timestamps, or structured data in the form
+   - Hierarchy: Bold headings (600-700 weight) for job titles, regular (400) for body text, medium (500) for CTAs
+
+3. COLOR SYSTEM:
+   - Brand primary: Google Blue (oklch(0.58 0.18 255)) as the hero color—trust, professionalism, tech leadership
+   - Accent colors map to Google's iconic palette: Red for urgency/CTAs, Yellow for highlights, Green for success states
+   - --primary used for "Continue with Google" button and key interactive elements
+   - --accent (Google Red) for secondary CTAs and attention-grabbing elements
+   - Semantic colors: Success (Green #34A853 inspired), Warning (Yellow #FBBC05 inspired), Destructive (Red #EA4335 inspired)
+   - Light mode dominates: Clean white backgrounds (oklch(0.99 0 0)) with subtle gray borders for form fields
+   - Dark mode optional but provided: Deep charcoal with vibrant accent pops for evening browsing
+
+4. USAGE GUIDE:
+   - Layout: Full-width hero section with Google office imagery, followed by centered container (max-width: 1200px) for job details and form
+   - Two-column layout on desktop: Left column for job information, right column for sticky appointment form
+   - Mobile: Stacked single-column with form appearing after job details
+   - Effects: Subtle shadows on cards (shadow-sm), no glassmorphism—keep it crisp and professional
+   - Google Careers logo: Top-left header, always visible
+   - "Continue with Google" button: Use --primary background with white text, include Google "G" icon
+   - Form validation: Use --destructive for errors, --success for confirmed fields
+   - Images: High-quality photos of Google offices (Mountain View, NYC, London), diverse marketing teams in action
+   - Accessibility: Ensure WCAG AA contrast ratios, focus states on all interactive elements, semantic HTML for screen readers
+==========================================================================
+*/
+
+:root {
+  /* Typography */
+  --font-sans: 'Google Sans', 'Roboto', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Google Sans Display', 'Google Sans', 'Roboto', system-ui, sans-serif;
+  --font-mono: 'Roboto Mono', Consolas, monospace;
+
+  /* Radius */
+  --radius: 0.5rem;
+
+  /* Google Brand Colors */
+  --google-blue: #4285F4;
+  --google-red: #EA4335;
+  --google-yellow: #FBBC05;
+  --google-green: #34A853;
+
+  /* Core UI Tokens */
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.15 0.01 255);
+  --card: oklch(0.98 0 0);
+  --card-foreground: oklch(0.15 0.01 255);
+  --popover: oklch(0.99 0 0);
+  --popover-foreground: oklch(0.15 0.01 255);
+  --primary: oklch(0.58 0.18 255);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.01 255);
+  --secondary-foreground: oklch(0.15 0.01 255);
+  --muted: oklch(0.96 0.005 255);
+  --muted-foreground: oklch(0.48 0.01 255);
+  --accent: oklch(0.58 0.22 25);
+  --accent-foreground: oklch(0.99 0 0);
+  --destructive: oklch(0.58 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.90 0.005 255);
+  --input: oklch(0.90 0.005 255);
+  --ring: oklch(0.58 0.18 255);
+  
+  /* Chart Tokens */
+  --chart-1: oklch(0.58 0.18 255);
+  --chart-2: oklch(0.58 0.22 25);
+  --chart-3: oklch(0.72 0.18 95);
+  --chart-4: oklch(0.62 0.20 145);
+  --chart-5: oklch(0.48 0.15 285);
+  
+  /* Sidebar Tokens */
+  --sidebar: oklch(0.98 0 0);
+  --sidebar-foreground: oklch(0.15 0.01 255);
+  --sidebar-primary: oklch(0.58 0.18 255);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.94 0.01 255);
+  --sidebar-accent-foreground: oklch(0.15 0.01 255);
+  --sidebar-border: oklch(0.90 0.005 255);
+  --sidebar-ring: oklch(0.58 0.18 255);
+}
+
+.dark {
+  --background: oklch(0.12 0.01 255);
+  --foreground: oklch(0.95 0.005 255);
+  --card: oklch(0.15 0.01 255);
+  --card-foreground: oklch(0.95 0.005 255);
+  --popover: oklch(0.12 0.01 255);
+  --popover-foreground: oklch(0.95 0.005 255);
+  --primary: oklch(0.65 0.20 255);
+  --primary-foreground: oklch(0.12 0.01 255);
+  --secondary: oklch(0.22 0.02 255);
+  --secondary-foreground: oklch(0.95 0.005 255);
+  --muted: oklch(0.20 0.015 255);
+  --muted-foreground: oklch(0.65 0.01 255);
+  --accent: oklch(0.65 0.24 25);
+  --accent-foreground: oklch(0.12 0.01 255);
+  --destructive: oklch(0.65 0.24 25);
+  --destructive-foreground: oklch(0.95 0.005 255);
+  --border: oklch(0.25 0.02 255);
+  --input: oklch(0.25 0.02 255);
+  --ring: oklch(0.65 0.20 255);
+  
+  /* Chart Tokens */
+  --chart-1: oklch(0.65 0.20 255);
+  --chart-2: oklch(0.65 0.24 25);
+  --chart-3: oklch(0.75 0.20 95);
+  --chart-4: oklch(0.68 0.22 145);
+  --chart-5: oklch(0.58 0.18 285);
+  
+  /* Sidebar Tokens */
+  --sidebar: oklch(0.15 0.01 255);
+  --sidebar-foreground: oklch(0.95 0.005 255);
+  --sidebar-primary: oklch(0.65 0.20 255);
+  --sidebar-primary-foreground: oklch(0.12 0.01 255);
+  --sidebar-accent: oklch(0.22 0.02 255);
+  --sidebar-accent-foreground: oklch(0.95 0.005 255);
+  --sidebar-border: oklch(0.25 0.02 255);
+  --sidebar-ring: oklch(0.65 0.20 255);
+}
+
+@theme inline {
+  /* Shadcn Core Mapping */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Charts Mapping */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Sidebar Mapping */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Google Brand Colors */
+  --color-google-blue: var(--google-blue);
+  --color-google-red: var(--google-red);
+  --color-google-yellow: var(--google-yellow);
+  --color-google-green: var(--google-green);
+
+  /* Typography */
+  --font-sans: var(--font-sans);
+  --font-heading: var(--font-heading);
+  --font-mono: var(--font-mono);
+
+  /* Radius */
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply scroll-smooth antialiased;
+  }
+
+  body {
+    @apply bg-background text-foreground min-h-screen;
+    font-family: var(--font-sans);
+    font-feature-settings: "kern", "liga", "clig";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    @apply font-medium tracking-tight;
+  }
+
+  code, pre {
+    @apply font-mono;
+  }
+
+  ::selection {
+    @apply bg-primary/20 text-primary;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full hover:bg-muted-foreground/40;
+  }
+}
+
+@keyframes shimmer {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@layer utilities {
+  .bg-white\/8  { background-color: rgba(255,255,255,0.08); }
+  .bg-white\/12 { background-color: rgba(255,255,255,0.12); }
+  .bg-white\/15 { background-color: rgba(255,255,255,0.15); }
+  .border-white\/10 { border-color: rgba(255,255,255,0.10); }
+  .border-white\/12 { border-color: rgba(255,255,255,0.12); }
+  .border-white\/15 { border-color: rgba(255,255,255,0.15); }
+}

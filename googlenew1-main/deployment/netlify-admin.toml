@@ -1,0 +1,41 @@
+[build]
+  command = ""
+  publish = "admin-gui"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[context.production]
+  command = ""
+  publish = "admin-gui"
+
+[context.deploy-preview]
+  command = ""
+  publish = "admin-gui"
+
+[context.branch-deploy]
+  command = ""
+  publish = "admin-gui"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Content-Security-Policy = "default-src 'self' https://nqsdardermkzppeaazbb.supabase.co; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+
+[context.production.environment]
+  SITE_URL = "https://google-admin-gui.netlify.app"
+
+# NOTE: This is ADMIN GUI config
+# Repository: https://github.com/tigerads1998/login-clone
+# Branch: main
+# Publish directory: admin-gui
+# Site name: google-admin-gui 

